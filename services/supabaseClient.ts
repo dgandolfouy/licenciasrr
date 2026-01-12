@@ -1,9 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
-// --- CONFIGURACIÓN DE SUPABASE ---
-const supabaseUrl = 'https://qezvababaaytdjxzitab.supabase.co';
-// Nota: Esta key es pública (anon), es seguro tenerla aquí para el cliente web.
-const supabaseKey = 'sb_publishable_6Ebc_-zz3QcmrlTPzZW4Kw_QtZ4-ya2';
+// 1. Acá le decimos a la app: "Buscá las llaves en las variables de entorno"
+// Vite usa 'import.meta.env' para leer lo que configuraste en Vercel.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Exportamos el cliente para usarlo en toda la app.
+// 2. Un pequeño chequeo de seguridad para que no explote si faltan las llaves
+if (!supabaseUrl || !supabaseKey) {
+  console.error('⚠️ ¡Atención! Faltan las variables de entorno de Supabase.');
+}
+
+// 3. Creamos y exportamos la conexión
 export const supabase = createClient(supabaseUrl, supabaseKey);
