@@ -1,243 +1,220 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useRef } from 'react';
-import { Employee, LeaveRecord, LeaveSettings, LeaveRequest, AgreedDay } from '../types';
-import { INITIAL_QUALITY_DOCS } from '../constants';
-import { calculateWorkingDays } from '../utils/leaveCalculator';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
+import { calculateWorkingDays } from '../utils/leaveCalculator';
+import toast from 'react-hot-toast'; // Usamos las notificaciones lindas
+
+// Definimos tipos básicos acá para evitar errores si no están en types.ts
+export interface Employee {
+  id: string;
+  name: string;
+  lastName: string;
+  hireDate: string;
+  active: boolean; // NUEVO CAMPO
+  leaveRecords: any[];
+  requests: any[];
+  readNewsIds: string[];
+  role: 'admin' | 'user';
+}
 
 interface DataContextType {
   employees: Employee[];
-  settings: LeaveSettings;
+  settings: any;
   loading: boolean;
-  getEmployeeById: (id: string) => Employee | undefined;
-  updateEmployee: (employee: Employee) => Promise<void>;
-  deleteEmployee: (id: string) => Promise<void>;
-  addManualLeave: (employeeId: string, record: Omit<LeaveRecord, 'id'>) => Promise<void>;
-  updateSettings: (settings: Partial<LeaveSettings>) => Promise<void>;
-  addAgreedDay: (date: string, description: string) => Promise<void>;
-  updateAgreedDay: (id: string, date: string, description: string) => Promise<void>;
-  applyAgreedDaysToAll: () => Promise<void>;
-  initializeYearlyAgreedDays: (year: number) => Promise<void>;
-  processRequest: (employeeId: string, requestId: string, status: 'Aprobado' | 'Rechazado', comment?: string) => Promise<void>;
-  createRequest: (employeeId: string, request: Omit<LeaveRequest, 'id' | 'status' | 'createdAt'>) => Promise<string | null>;
-  markRequestAsNotified: (employeeId: string, requestId: string) => Promise<void>;
-  publishNews: (content: string, author: string, type?: 'Comunicado' | 'Sistema', targetId?: string) => Promise<void>;
-  markNewsAsRead: (employeeId: string, newsId: string) => Promise<void>;
-  clearUnreadNews: (employeeId: string) => Promise<void>;
-  addLeaveRecord: (employeeId: string, record: Omit<LeaveRecord, 'id'>) => Promise<void>; // Agregado para compatibilidad
+  refreshData: () => Promise<void>; // Para forzar actualización
+  updateEmployee: (emp: Employee) => Promise<void>;
+  createRequest: (empId: string, request: any) => Promise<boolean>;
+  processRequest: (empId: string, reqId: string, status: 'Aprobado' | 'Rechazado', comment: string) => Promise<void>;
+  addManualLeave: (empId: string, leaveData: any) => Promise<void>;
+  toggleEmployeeActive: (empId: string, isActive: boolean) => Promise<void>;
+  addNewEmployee: (empData: any) => Promise<void>;
+  publishNews: (content: string) => Promise<void>;
+  updateSettings: (newSettings: any) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Configuración segura por defecto (Evita que el diseño se rompa)
-const defaultSettings: LeaveSettings = { 
-    agreedLeaveDays: [], 
-    newsContent: '', 
-    newsHistory: [], 
-    qualityDocs: INITIAL_QUALITY_DOCS 
-};
-
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [settings, setSettings] = useState<LeaveSettings>(defaultSettings);
+  const [settings, setSettings] = useState<any>({ agreedLeaveDays: [], newsHistory: [] });
   const [loading, setLoading] = useState(true);
-  const isWriting = useRef(false);
 
-  // --- CARGA DE DATOS ---
-  const fetchData = async () => {
-    if (isWriting.current) return;
-
+  // FUNCIÓN MAESTRA DE CARGA
+  const refreshData = async () => {
     try {
-      const { data: employeesData, error: empError } = await supabase
-        .from('employees')
-        .select('*');
-      
-      const { data: settingsData, error: setError } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('id', 1)
-        .maybeSingle();
+      const { data: eData } = await supabase.from('employees').select('*').order('lastName');
+      const { data: sData } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
 
-      if (empError) console.error("Error empleados:", empError);
-      
-      if (employeesData) {
-        // Formateo seguro: Si algo viene null, poneme un array vacío
-        const safeEmployees = employeesData.map((e: any) => ({
-            ...e,
-            requests: e.requests || [],
-            leaveRecords: e.leaveRecords || [],
-            readNewsIds: e.readNewsIds || []
-        }));
-        setEmployees(safeEmployees);
-      }
-
-      if (settingsData) {
-        setSettings({
-            ...defaultSettings, // Mantiene defaults si faltan campos
-            ...settingsData,
-            agreedLeaveDays: settingsData.agreedLeaveDays || [],
-            newsHistory: settingsData.newsHistory || []
-        });
-      } else if (!settingsData && !loading) {
-         // Si no existe settings en la DB, lo creamos para la próxima
-         await supabase.from('settings').insert([{ id: 1, ...defaultSettings }]);
-      }
-
+      if (eData) setEmployees(eData);
+      if (sData) setSettings(sData);
     } catch (error) {
-      console.error("Error general:", error);
+      console.error("Error cargando datos:", error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-    // Aumentamos el tiempo a 10s para dar respiro a la UI
-    const interval = setInterval(fetchData, 10000); 
+    refreshData();
+    // Auto-refresco cada 10 segundos por seguridad
+    const interval = setInterval(refreshData, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // --- FUNCIONES (Logica Híbrida: Actualiza UI rapido + Guarda en DB) ---
+  // 1. CREAR SOLICITUD (Empleado)
+  const createRequest = async (empId: string, request: any) => {
+    const emp = employees.find(e => e.id === empId);
+    if (!emp) return false;
 
-  const updateEmployee = async (updated: Employee) => {
-    isWriting.current = true;
-    setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e)); // UI instantánea
+    // Calculamos días automáticamente
+    const days = calculateWorkingDays(request.startDate, request.endDate, settings.agreedLeaveDays);
     
-    try {
-        await supabase.from('employees').update({
-            name: updated.name,
-            lastName: updated.lastName,
-            role: updated.role,
-            hireDate: updated.hireDate,
-            birthDate: updated.birthDate,
-            leaveRecords: updated.leaveRecords,
-            requests: updated.requests,
-            readNewsIds: updated.readNewsIds,
-            hasUnreadNews: updated.hasUnreadNews
-        }).eq('id', updated.id);
-    } catch (e) {
-        console.error("Error guardando empleado:", e);
-    } finally {
-        setTimeout(() => isWriting.current = false, 2000);
-    }
-  };
-
-  const createRequest = async (employeeId: string, request: Omit<LeaveRequest, 'id' | 'status' | 'createdAt'>) => {
-    isWriting.current = true;
-    const employee = employees.find(e => e.id === employeeId);
-    if (!employee) return "Empleado no encontrado";
-
-    const workingDays = calculateWorkingDays(request.startDate, request.endDate, settings.agreedLeaveDays || []); // Usamos los días acordados correctos
-
-    // Validación duplicados
-    const hasOverlap = (employee.requests || []).some(r => 
-        r.status !== 'Rechazado' && 
-        ((request.startDate >= r.startDate && request.startDate <= r.endDate) || 
-         (request.endDate >= r.startDate && request.endDate <= r.endDate))
-    );
-    if (hasOverlap) return "Ya existe solicitud en estas fechas";
-
-    const newReq: LeaveRequest = { 
-        ...request, 
-        id: `REQ_${Date.now()}`, 
-        status: 'Pendiente', 
-        days: workingDays, 
-        createdAt: new Date().toISOString() 
+    const newReq = {
+      ...request,
+      id: `REQ_${Date.now()}`,
+      days: days, // Días calculados por el sistema
+      status: 'Pendiente',
+      createdAt: new Date().toISOString()
     };
 
-    const updatedRequests = [...(employee.requests || []), newReq];
-    const updatedEmployee = { ...employee, requests: updatedRequests };
+    const updatedRequests = [...(emp.requests || []), newReq];
 
-    // 1. UI update
-    setEmployees(prev => prev.map(e => e.id === employeeId ? updatedEmployee : e));
-
-    // 2. DB update
     try {
-        await supabase.from('employees').update({ requests: updatedRequests }).eq('id', employeeId);
-        return null;
+      const { error } = await supabase
+        .from('employees')
+        .update({ requests: updatedRequests })
+        .eq('id', empId);
+
+      if (error) throw error;
+      
+      // Actualizamos localmente rápido
+      setEmployees(prev => prev.map(e => e.id === empId ? { ...e, requests: updatedRequests } : e));
+      return true;
     } catch (e) {
-        return "Error de conexión";
-    } finally {
-        setTimeout(() => isWriting.current = false, 2000);
+      toast.error("Error de conexión");
+      return false;
     }
   };
 
-  const markNewsAsRead = async (empId: string, nId: string) => {
-    isWriting.current = true;
+  // 2. PROCESAR SOLICITUD (Admin: Aprobar/Rechazar)
+  const processRequest = async (empId: string, reqId: string, status: 'Aprobado' | 'Rechazado', comment: string) => {
     const emp = employees.find(e => e.id === empId);
     if (!emp) return;
 
-    const currentReads = emp.readNewsIds || [];
-    if (currentReads.includes(nId)) return; // Ya estaba leída, no hacer nada
+    // Buscamos la solicitud
+    const updatedRequests = (emp.requests || []).map(r => 
+      r.id === reqId ? { ...r, status, adminComment: comment } : r
+    );
 
-    const newReads = [...currentReads, nId];
-    const updatedEmp = { ...emp, readNewsIds: newReads };
+    // Si se aprueba, la movemos al historial oficial (leaveRecords)
+    let updatedRecords = [...(emp.leaveRecords || [])];
+    if (status === 'Aprobado') {
+      const req = emp.requests.find(r => r.id === reqId);
+      if (req) {
+        updatedRecords.push({
+          id: `APP_${req.id}`,
+          type: req.type,
+          startDate: req.startDate,
+          endDate: req.endDate,
+          days: req.days,
+          notes: req.reason,
+          year: new Date(req.startDate).getFullYear()
+        });
+      }
+    }
 
-    setEmployees(prev => prev.map(e => e.id === empId ? updatedEmp : e));
-    
-    // Forzamos la escritura en Supabase
-    await supabase.from('employees').update({ readNewsIds: newReads }).eq('id', empId);
-    
-    setTimeout(() => isWriting.current = false, 1000);
+    try {
+      await supabase
+        .from('employees')
+        .update({ requests: updatedRequests, leaveRecords: updatedRecords })
+        .eq('id', empId);
+      
+      toast.success(`Solicitud ${status} correctamente`);
+      refreshData(); // Recargamos para asegurar sincronización
+    } catch (e) {
+      toast.error("Error al guardar decisión");
+    }
   };
 
-  // --- RESTO DE FUNCIONES (Simplificadas para funcionar) ---
+  // 3. CARGA MANUAL (Admin)
+  const addManualLeave = async (empId: string, leaveData: any) => {
+    const emp = employees.find(e => e.id === empId);
+    if (!emp) return;
 
-  const getEmployeeById = (id: string) => employees.find(e => e.id === id);
+    // Calculamos días automáticos si no vienen
+    const days = leaveData.days || calculateWorkingDays(leaveData.startDate, leaveData.endDate, settings.agreedLeaveDays);
+
+    const newRecord = {
+      id: `MAN_${Date.now()}`,
+      ...leaveData,
+      days: days,
+      year: new Date(leaveData.startDate).getFullYear()
+    };
+
+    const updatedRecords = [...(emp.leaveRecords || []), newRecord];
+
+    try {
+      await supabase.from('employees').update({ leaveRecords: updatedRecords }).eq('id', empId);
+      toast.success("Licencia cargada al legajo");
+      refreshData();
+    } catch (e) {
+      toast.error("Error al cargar licencia");
+    }
+  };
+
+  // 4. GESTIÓN EMPLEADOS (Alta/Baja)
+  const toggleEmployeeActive = async (empId: string, isActive: boolean) => {
+    await supabase.from('employees').update({ active: isActive }).eq('id', empId);
+    toast.success(isActive ? "Empleado reactivado" : "Empleado archivado");
+    refreshData();
+  };
+
+  const addNewEmployee = async (empData: any) => {
+    const { error } = await supabase.from('employees').insert([{ ...empData, active: true }]);
+    if (error) {
+      toast.error("Error: Puede que la cédula ya exista");
+    } else {
+      toast.success("Colaborador agregado al equipo");
+      refreshData();
+    }
+  };
+
+  // 5. NOTICIAS Y SETTINGS
+  const publishNews = async (content: string) => {
+    const newItem = { id: `N_${Date.now()}`, date: new Date().toISOString(), content, author: 'RRHH' };
+    const newHistory = [newItem, ...(settings.newsHistory || [])];
+    
+    await supabase.from('settings').update({ newsHistory: newHistory }).eq('id', 1);
+    
+    // Marcar como no leída para todos
+    await supabase.from('employees').update({ hasUnreadNews: true });
+    
+    setSettings({ ...settings, newsHistory: newHistory });
+    toast.success("Comunicado enviado a planta");
+  };
+
+  const updateSettings = async (newSettings: any) => {
+     await supabase.from('settings').update(newSettings).eq('id', 1);
+     setSettings({ ...settings, ...newSettings });
+     toast.success("Configuración guardada");
+  };
   
-  const updateSettings = async (newSettings: Partial<LeaveSettings>) => {
-      const merged = { ...settings, ...newSettings };
-      setSettings(merged);
-      await supabase.from('settings').update(newSettings).eq('id', 1);
-  };
-
-  const addAgreedDay = async (date: string, description: string) => {
-      const newDay: AgreedDay = { id: `AG_${Date.now()}`, date, description, active: true };
-      const updatedDays = [newDay, ...(settings.agreedLeaveDays || [])];
-      await updateSettings({ agreedLeaveDays: updatedDays });
-  };
-
-  // Funciones placeholder (No críticas por ahora)
-  const deleteEmployee = async (id: string) => {}; 
-  const addManualLeave = async () => {};
-  const updateAgreedDay = async () => {};
-  const applyAgreedDaysToAll = async () => {};
-  const initializeYearlyAgreedDays = async () => {};
-  const markRequestAsNotified = async () => {};
-  const clearUnreadNews = async () => {};
-  const addLeaveRecord = async () => {};
-  const processRequest = async (employeeId: string, requestId: string, status: string, comment?: string) => {
-      // Implementación básica si sos Admin y necesitás aprobar
-      const emp = employees.find(e => e.id === employeeId);
-      if(!emp) return;
-      const updatedReqs = emp.requests.map(r => r.id === requestId ? {...r, status: status as any, adminComment: comment} : r);
-      await updateEmployee({...emp, requests: updatedReqs});
-  };
-
-  const publishNews = async (content: string, author: string, type = 'Comunicado', targetId?: string) => {
-     // Implementación básica para crear noticia
-     const newItem = { id: `N_${Date.now()}`, date: new Date().toISOString(), content, author, type: type as any };
-     const newHistory = [newItem, ...(settings.newsHistory || [])];
-     await updateSettings({ newsHistory: newHistory });
-  };
+  // Helpers
+  const updateEmployee = async (e: Employee) => { /* Implementar si se necesita edición directa */ };
 
   return (
-    <DataContext.Provider value={{ 
-        employees, settings, loading, 
-        getEmployeeById, updateEmployee, deleteEmployee, 
-        addManualLeave, updateSettings, addAgreedDay, updateAgreedDay, 
-        applyAgreedDaysToAll, initializeYearlyAgreedDays, processRequest, 
-        createRequest, markRequestAsNotified, publishNews, markNewsAsRead, 
-        clearUnreadNews, addLeaveRecord 
+    <DataContext.Provider value={{
+      employees, settings, loading, refreshData,
+      createRequest, processRequest, addManualLeave,
+      toggleEmployeeActive, addNewEmployee, publishNews, updateSettings,
+      updateEmployee
     }}>
-      {loading ? (
-          <div className="flex items-center justify-center h-screen text-xl">Cargando datos...</div>
-      ) : children}
+      {children}
     </DataContext.Provider>
   );
 };
 
-export const useData = () => { 
-    const c = useContext(DataContext); 
-    if (!c) throw new Error("useData must be used within DataProvider"); 
-    return c; 
+export const useData = () => {
+  const context = useContext(DataContext);
+  if (!context) throw new Error("useData must be used within DataProvider");
+  return context;
 };
