@@ -50,7 +50,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => { refreshData(); }, []);
 
-  // 1. GESTIÓN DE EMPLEADOS
   const toggleEmployeeActive = async (empId: string, isActive: boolean) => {
     const { error } = await supabase.from('employees').update({ active: isActive }).eq('id', empId);
     if (!error) {
@@ -61,7 +60,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // 2. CREAR SOLICITUD
   const createRequest = async (empId: string, request: any) => {
     const emp = employees.find(e => e.id === empId);
     if (!emp) return false;
@@ -77,7 +75,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return false;
   };
 
-  // 3. AGREGAR DÍA ACORDADO
   const addAgreedDay = async (date: string, description: string) => {
       const newDay = { id: `AG_${Date.now()}`, date, description, active: true };
       const updatedDays = [newDay, ...(settings.agreedLeaveDays || [])];
@@ -87,7 +84,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toast.success("Día acordado agregado");
   };
 
-  // 4. CARGA MANUAL
   const addManualLeave = async (empId: string, leaveData: any) => {
     const emp = employees.find(e => e.id === empId);
     if (!emp) return;
