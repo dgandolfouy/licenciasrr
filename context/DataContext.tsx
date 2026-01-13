@@ -1,18 +1,20 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { calculateWorkingDays } from '../utils/leaveCalculator';
-import toast from 'react-hot-toast'; // Usamos las alertas lindas aquí también
+import toast from 'react-hot-toast';
 
 export interface Employee {
   id: string;
   name: string;
   lastName: string;
   hireDate: string;
-  active: boolean; // <--- CAMPO PARA SABER SI TRABAJA O NO
+  active: boolean;
   leaveRecords: any[];
   requests: any[];
   readNewsIds: string[];
   role: 'admin' | 'user';
+  birthDate?: string; 
+  type?: string;
 }
 
 interface DataContextType {
@@ -24,7 +26,7 @@ interface DataContextType {
   createRequest: (empId: string, request: any) => Promise<boolean>;
   processRequest: (empId: string, reqId: string, status: 'Aprobado' | 'Rechazado', comment: string) => Promise<void>;
   addManualLeave: (empId: string, leaveData: any) => Promise<void>;
-  addAgreedDay: (date: string, description: string) => Promise<void>; // Nueva función para días acordados
+  addAgreedDay: (date: string, description: string) => Promise<void>;
   toggleEmployeeActive: (empId: string, isActive: boolean) => Promise<void>;
   publishNews: (content: string) => Promise<void>;
   updateSettings: (newSettings: any) => Promise<void>;
@@ -48,7 +50,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => { refreshData(); }, []);
 
-  // 1. GESTIÓN DE EMPLEADOS (ACTIVO / INACTIVO)
+  // 1. GESTIÓN DE EMPLEADOS
   const toggleEmployeeActive = async (empId: string, isActive: boolean) => {
     const { error } = await supabase.from('employees').update({ active: isActive }).eq('id', empId);
     if (!error) {
@@ -59,7 +61,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // 2. CREAR SOLICITUD (Automática)
+  // 2. CREAR SOLICITUD
   const createRequest = async (empId: string, request: any) => {
     const emp = employees.find(e => e.id === empId);
     if (!emp) return false;
@@ -75,22 +77,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return false;
   };
 
-  // 3. AGREGAR DÍA ACORDADO (Con Notificación y Contexto)
+  // 3. AGREGAR DÍA ACORDADO
   const addAgreedDay = async (date: string, description: string) => {
       const newDay = { id: `AG_${Date.now()}`, date, description, active: true };
       const updatedDays = [newDay, ...(settings.agreedLeaveDays || [])];
-      
-      // Actualizamos settings
       await supabase.from('settings').update({ agreedLeaveDays: updatedDays }).eq('id', 1);
-      
-      // Publicamos noticia automática para dar contexto
-      await publishNews(`📅 Nuevo día acordado: ${description} (${date}). Se verá reflejado en su saldo.`);
-      
+      await publishNews(`📅 Nuevo día acordado: ${description} (${date}).`);
       setSettings({ ...settings, agreedLeaveDays: updatedDays });
-      toast.success("Día acordado agregado y comunicado enviado");
+      toast.success("Día acordado agregado");
   };
 
-  // 4. CARGA MANUAL (Sin pedir días manuales)
+  // 4. CARGA MANUAL
   const addManualLeave = async (empId: string, leaveData: any) => {
     const emp = employees.find(e => e.id === empId);
     if (!emp) return;
@@ -102,9 +99,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     refreshData();
   };
 
-  // Funciones auxiliares
   const processRequest = async (empId: string, reqId: string, status: string, comment: string) => {
-      // (Misma lógica de antes, simplificada por espacio)
       const emp = employees.find(e => e.id === empId);
       if(!emp) return;
       const updatedReqs = emp.requests.map(r => r.id === reqId ? {...r, status, adminComment: comment} : r);
@@ -137,7 +132,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 };
 
 export const useData = () => {
-  const c = useContext(DataContext);
-  if (!context) throw new Error("useData err");
-  return c;
+  const context = useContext(DataContext);
+  if (!context) throw new Error("useData must be used within DataProvider");
+  return context;
 };
