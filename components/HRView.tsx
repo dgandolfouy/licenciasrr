@@ -1,167 +1,211 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { formatDateDisplay } from '../utils/leaveCalculator';
-import { Plus, X, CheckCircle2, Send, XCircle, Check, Loader2 } from './icons/LucideIcons';
+import { calculateWorkingDays, formatDateDisplay } from '../utils/leaveCalculator';
+import { Users, FileText, Settings, LogOut, Search, UserPlus, Eye, EyeOff, Plus } from './icons/LucideIcons';
+import toast from 'react-hot-toast'; // Alertas lindas
 
 const HRView: React.FC = () => {
-    const { user } = useAuth();
-    const { employees, processRequest, publishNews, addManualLeave } = useData();
+    const { logout } = useAuth();
+    const { employees, settings, addManualLeave, addAgreedDay, toggleEmployeeActive, publishNews, processRequest } = useData();
     
-    const [selectedRequestId, setSelectedRequestId] = useState<{empId: string, reqId: string} | null>(null);
-    const [adminComment, setAdminComment] = useState('');
-    const [newsText, setNewsText] = useState('');
-    const [isProcessing, setIsProcessing] = useState(false);
+    // ESTADOS PARA BUSCADOR Y PESTAÑAS
+    const [activeTab, setActiveTab] = useState<'employees' | 'requests' | 'agreed' | 'news'>('employees');
+    const [searchTerm, setSearchTerm] = useState(''); // <--- BUSCADOR PREDICTIVO
     
-    const [isManualOpen, setIsManualOpen] = useState(false);
-    const [manualData, setManualData] = useState({ empId: '', start: '', end: '', type: 'Anual' as any, notes: '', days: 1 });
+    // ESTADOS PARA CARGA MANUAL (SIN DIAS)
+    const [manualLeave, setManualLeave] = useState({ empId: '', start: '', end: '', type: 'Anual', notes: '' });
+    
+    // ESTADO PARA DÍAS ACORDADOS
+    const [newAgreedDay, setNewAgreedDay] = useState({ date: '', desc: '' });
 
-    const pendingRequests = useMemo(() => {
-        return employees.flatMap(emp => 
-            (emp.requests || [])
-                .filter(r => r.status === 'Pendiente')
-                .map(r => ({ ...r, employeeName: `${emp.lastName}, ${emp.name}`, employeeId: emp.id }))
-        ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }, [employees]);
+    // --- LÓGICA DE FILTRADO (BUSCADOR) ---
+    // Filtramos empleados por nombre O cédula
+    const filteredEmployees = employees.filter(e => 
+        e.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        e.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.id.includes(searchTerm)
+    );
 
-    const selectedRequestData = useMemo(() => {
-        if (!selectedRequestId) return null;
-        const emp = employees.find(e => e.id === selectedRequestId.empId);
-        const req = emp?.requests.find(r => r.id === selectedRequestId.reqId);
-        return { emp, req };
-    }, [selectedRequestId, employees]);
+    // Separamos activos de inactivos
+    const activeEmployees = filteredEmployees.filter(e => e.active !== false); // Por defecto true
+    const archivedEmployees = filteredEmployees.filter(e => e.active === false);
 
-    const handleProcess = async (status: 'Aprobado' | 'Rechazado') => {
-        if (!selectedRequestId) return;
-        if (status === 'Rechazado' && !adminComment.trim()) {
-            alert("⚠️ MOTIVO OBLIGATORIO: Para rechazar debes escribir el porqué en el cuadro de texto.");
+    // --- HANDLERS ---
+    
+    const handleAddManualLeave = async () => {
+        if (!manualLeave.empId || !manualLeave.start || !manualLeave.end) {
+            toast.error("Faltan datos obligatorios");
             return;
         }
-        if (!confirm(`¿Estás seguro de ${status === 'Aprobado' ? 'APROBAR' : 'RECHAZAR'} esta solicitud?`)) return;
-
-        setIsProcessing(true);
-        try {
-            await processRequest(selectedRequestId.empId, selectedRequestId.reqId, status, adminComment);
-            alert(`✅ Movimiento registrado: Solicitud ${status}.`);
-            setSelectedRequestId(null);
-            setAdminComment('');
-        } catch (e) {
-            alert("Error al procesar. Intenta nuevamente.");
-        } finally {
-            setIsProcessing(false);
-        }
+        await addManualLeave(manualLeave.empId, {
+            startDate: manualLeave.start,
+            endDate: manualLeave.end,
+            type: manualLeave.type as any,
+            notes: manualLeave.notes || 'Carga Admin'
+        });
+        setManualLeave({ empId: '', start: '', end: '', type: 'Anual', notes: '' });
     };
 
-    const handleManualSubmit = async () => {
-        if (!manualData.empId || !manualData.start || !manualData.end) {
-            alert("⚠️ ERROR: Completa todos los campos antes de confirmar.");
+    const handleAddAgreedDay = async () => {
+        if (!newAgreedDay.date || !newAgreedDay.desc) {
+            toast.error("Completa fecha y descripción");
             return;
         }
-        setIsProcessing(true);
-        try {
-            await addManualLeave(manualData.empId, {
-                startDate: manualData.start,
-                endDate: manualData.end,
-                days: manualData.days,
-                type: manualData.type,
-                notes: manualData.notes,
-                year: new Date(manualData.start + 'T00:00:00').getFullYear()
-            });
-            alert("✅ ÉXITO: Licencia cargada directamente en el legajo.");
-            setIsManualOpen(false);
-            setManualData({ empId: '', start: '', end: '', type: 'Anual', notes: '', days: 1 });
-        } finally {
-            setIsProcessing(false);
-        }
+        await addAgreedDay(newAgreedDay.date, newAgreedDay.desc);
+        setNewAgreedDay({ date: '', desc: '' });
     };
 
     return (
-        <div className="max-w-6xl mx-auto space-y-12 animate-fade-in pb-24 relative">
-            <button onClick={() => setIsManualOpen(true)} className="fixed bottom-10 right-10 w-20 h-20 bg-rr-dark text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-[70] border-4 border-rr-orange">
-                <Plus size={40} />
-            </button>
-
-            <div className="bg-rr-dark p-10 rounded-[3.5rem] shadow-2xl relative border border-white/5">
-                <div className="flex flex-col md:flex-row gap-10">
-                    <div className="flex-1 space-y-4">
-                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Noticias de Planta</h3>
-                        <textarea value={newsText} onChange={(e) => setNewsText(e.target.value)} placeholder="Escribe el anuncio para toda la planta..." className="w-full p-8 bg-white/5 text-white rounded-[2rem] border-none outline-none font-bold min-h-[140px] text-lg transition-all focus:bg-white/10" />
-                        <button onClick={async () => { if(!newsText) return; await publishNews(newsText, user?.name || 'RRHH'); setNewsText(''); alert("✅ NOTICIA PUBLICADA: Todos los empleados recibirán el aviso."); }} className="flex items-center gap-4 bg-rr-orange text-white px-10 py-6 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-rr-orange-dark transition-all shadow-xl">
-                            <Send size={24} /> Lanzar Comunicado
-                        </button>
-                    </div>
+        <div className="min-h-screen bg-gray-900 text-white pb-20">
+            {/* HEADER */}
+            <div className="bg-black/50 p-6 flex justify-between items-center sticky top-0 z-50 backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                    <div className="bg-rr-orange p-2 rounded-lg"><Settings className="text-white" size={24}/></div>
+                    <h1 className="text-xl font-black uppercase tracking-wider">Administración</h1>
                 </div>
+                <button onClick={logout} className="p-2 bg-gray-800 rounded-full hover:bg-red-900 transition-colors"><LogOut size={20}/></button>
             </div>
 
-            <div className="space-y-6">
-                <h3 className="text-2xl font-black uppercase text-rr-dark dark:text-white px-6">Bandeja de Entrada</h3>
-                {pendingRequests.length === 0 ? (
-                    <div className="p-20 text-center bg-white dark:bg-gray-800/50 rounded-[4rem] border-2 border-dashed border-gray-100 dark:border-gray-700">
-                        <CheckCircle2 size={64} className="mx-auto text-gray-200 mb-6" />
-                        <p className="text-gray-400 font-black uppercase tracking-widest text-sm">No hay solicitudes pendientes</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {pendingRequests.map(req => (
-                            <div key={req.id} className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] shadow-xl border-2 border-transparent hover:border-rr-orange/20 transition-all">
-                                <p className="text-xl font-black text-rr-dark dark:text-white uppercase mb-1">{req.employeeName}</p>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">{formatDateDisplay(req.startDate)} al {formatDateDisplay(req.endDate)} ({req.days} d.)</p>
-                                <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl mb-6"><p className="text-xs font-bold text-gray-600 dark:text-gray-300 italic">"{req.reason}"</p></div>
-                                <button onClick={() => setSelectedRequestId({empId: req.employeeId, reqId: req.id})} className="w-full py-5 bg-rr-dark text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-rr-orange transition-all">Resolver Solicitud</button>
+            {/* BARRA DE NAVEGACIÓN */}
+            <div className="flex overflow-x-auto p-4 gap-4 no-scrollbar">
+                {[
+                    { id: 'employees', icon: Users, label: 'Personal' },
+                    { id: 'requests', icon: FileText, label: 'Solicitudes' },
+                    { id: 'agreed', icon: Plus, label: 'Días Acordados' },
+                ].map(tab => (
+                    <button 
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-widest whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-rr-orange text-white shadow-lg shadow-orange-900/20' : 'bg-gray-800 text-gray-400'}`}
+                    >
+                        <tab.icon size={16}/> {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            <div className="p-4 max-w-4xl mx-auto space-y-8 animate-fade-in">
+                
+                {/* --- PESTAÑA: PERSONAL (BUSCADOR Y CARGA) --- */}
+                {activeTab === 'employees' && (
+                    <div className="space-y-8">
+                        
+                        {/* TARJETA DE CARGA RÁPIDA (LICENCIA DIRECTA) */}
+                        <div className="bg-gray-800 p-6 rounded-[2rem] border border-gray-700">
+                            <h2 className="text-sm font-black uppercase text-rr-orange mb-4 tracking-widest flex items-center gap-2">
+                                <Plus size={16}/> Carga Directa (Sin Solicitud)
+                            </h2>
+                            <div className="grid gap-4">
+                                {/* SELECTOR DE EMPLEADO (Mejorado visualmente) */}
+                                <select 
+                                    value={manualLeave.empId} 
+                                    onChange={e => setManualLeave({...manualLeave, empId: e.target.value})}
+                                    className="w-full bg-gray-900 border border-gray-700 p-4 rounded-xl text-white font-bold outline-none focus:border-rr-orange"
+                                >
+                                    <option value="">Seleccionar Empleado...</option>
+                                    {employees.filter(e => e.active !== false).map(e => (
+                                        <option key={e.id} value={e.id}>{e.lastName}, {e.name}</option>
+                                    ))}
+                                </select>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input type="date" value={manualLeave.start} onChange={e => setManualLeave({...manualLeave, start: e.target.value})} className="bg-gray-900 border border-gray-700 p-3 rounded-xl text-white"/>
+                                    <input type="date" value={manualLeave.end} onChange={e => setManualLeave({...manualLeave, end: e.target.value})} className="bg-gray-900 border border-gray-700 p-3 rounded-xl text-white"/>
+                                </div>
+                                
+                                <input type="text" placeholder="Motivo (Opcional)" value={manualLeave.notes} onChange={e => setManualLeave({...manualLeave, notes: e.target.value})} className="bg-gray-900 border border-gray-700 p-4 rounded-xl text-white"/>
+
+                                <button onClick={handleAddManualLeave} className="bg-white text-black py-4 rounded-xl font-black uppercase hover:bg-rr-orange hover:text-white transition-all">
+                                    Confirmar Carga
+                                </button>
                             </div>
-                        ))}
+                        </div>
+
+                        {/* BUSCADOR Y LISTA */}
+                        <div>
+                            <div className="relative mb-6">
+                                <Search className="absolute left-4 top-4 text-gray-500" size={20}/>
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar por Nombre, Apellido o Cédula..." 
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    className="w-full bg-gray-800 pl-12 pr-4 py-4 rounded-2xl font-bold text-white border-none focus:ring-2 focus:ring-rr-orange outline-none placeholder-gray-600"
+                                />
+                            </div>
+
+                            <div className="space-y-3">
+                                {activeEmployees.map(emp => (
+                                    <div key={emp.id} className="bg-gray-800 p-5 rounded-2xl flex justify-between items-center border border-gray-700/50">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-rr-orange rounded-full flex items-center justify-center font-black text-white">
+                                                {emp.name.charAt(0)}{emp.lastName.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-white uppercase">{emp.lastName}, {emp.name}</p>
+                                                <p className="text-xs text-gray-500">CI {emp.id}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {/* BOTÓN ARCHIVAR/ACTIVAR */}
+                                            <button 
+                                                onClick={() => toggleEmployeeActive(emp.id, false)}
+                                                className="p-2 bg-gray-700 rounded-lg text-gray-400 hover:text-red-400 hover:bg-gray-600 transition-colors"
+                                                title="Archivar Empleado"
+                                            >
+                                                <EyeOff size={18}/>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {/* MOSTRAR ARCHIVADOS SI HAY BÚSQUEDA */}
+                                {archivedEmployees.length > 0 && (
+                                    <div className="mt-8 pt-8 border-t border-gray-800">
+                                        <h3 className="text-xs font-black uppercase text-gray-600 mb-4">Personal Archivado / Inactivo</h3>
+                                        {archivedEmployees.map(emp => (
+                                            <div key={emp.id} className="bg-gray-900/50 p-4 rounded-xl flex justify-between items-center opacity-60 hover:opacity-100 transition-opacity">
+                                                <p className="text-sm font-bold text-gray-400">{emp.lastName}, {emp.name}</p>
+                                                <button onClick={() => toggleEmployeeActive(emp.id, true)} className="text-green-500 text-xs font-bold uppercase flex items-center gap-1 hover:underline"><Eye size={14}/> Reactivar</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- PESTAÑA: DÍAS ACORDADOS --- */}
+                {activeTab === 'agreed' && (
+                    <div className="bg-gray-800 p-6 rounded-[2rem] border border-gray-700 space-y-6">
+                         <h2 className="text-xl font-black uppercase text-white">Gestión de Días Planta</h2>
+                         <p className="text-gray-400 text-sm">Al agregar un día aquí, se enviará una notificación a todos y se descontará del saldo si corresponde.</p>
+                         
+                         <div className="grid gap-4 bg-gray-900 p-4 rounded-xl">
+                            <label className="text-xs font-bold text-gray-500 uppercase">Fecha del Feriado/Acuerdo</label>
+                            <input type="date" value={newAgreedDay.date} onChange={e => setNewAgreedDay({...newAgreedDay, date: e.target.value})} className="bg-gray-800 border border-gray-700 p-3 rounded-lg text-white"/>
+                            
+                            <label className="text-xs font-bold text-gray-500 uppercase">Nombre (Ej: Sábado Compensado)</label>
+                            <input type="text" value={newAgreedDay.desc} onChange={e => setNewAgreedDay({...newAgreedDay, desc: e.target.value})} className="bg-gray-800 border border-gray-700 p-3 rounded-lg text-white"/>
+                            
+                            <button onClick={handleAddAgreedDay} className="bg-rr-orange text-white py-3 rounded-lg font-black uppercase tracking-widest mt-2 hover:bg-orange-600">
+                                Confirmar y Notificar
+                            </button>
+                         </div>
+
+                         <div className="space-y-2">
+                             <h3 className="text-xs font-black uppercase text-gray-500 mt-6">Historial Vigente</h3>
+                             {settings.agreedLeaveDays.map((d: any) => (
+                                 <div key={d.id} className="flex justify-between p-3 bg-gray-900 rounded-lg border-l-4 border-rr-orange">
+                                     <span className="font-bold">{d.description}</span>
+                                     <span className="text-gray-400">{formatDateDisplay(d.date)}</span>
+                                 </div>
+                             ))}
+                         </div>
                     </div>
                 )}
             </div>
-
-            {isManualOpen && (
-                <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[3rem] p-10 shadow-2xl relative animate-scale-in">
-                        <button onClick={() => setIsManualOpen(false)} className="absolute top-8 right-8 text-gray-400 hover:text-red-500"><X size={32}/></button>
-                        <h2 className="text-3xl font-black uppercase text-rr-dark dark:text-white mb-8">Cargar Licencia Directa</h2>
-                        <div className="space-y-4">
-                            <select value={manualData.empId} onChange={e => setManualData({...manualData, empId: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border-none text-rr-dark dark:text-white">
-                                <option value="">Selecciona legajo...</option>
-                                {employees.sort((a,b)=>a.lastName.localeCompare(b.lastName)).map(e => (
-                                    <option key={e.id} value={e.id}>{e.lastName}, {e.name} ({e.id})</option>
-                                ))}
-                            </select>
-                            <div className="grid grid-cols-2 gap-4">
-                                <input type="date" value={manualData.start} onChange={e => setManualData({...manualData, start: e.target.value})} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border" />
-                                <input type="date" value={manualData.end} onChange={e => setManualData({...manualData, end: e.target.value})} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <select value={manualData.type} onChange={e => setManualData({...manualData, type: e.target.value as any})} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold"><option value="Anual">Anual</option><option value="Especial">Especial</option></select>
-                                <input type="number" value={manualData.days} onChange={e => setManualData({...manualData, days: parseInt(e.target.value)})} placeholder="Días" className="p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border" />
-                            </div>
-                            <input type="text" value={manualData.notes} onChange={e => setManualData({...manualData, notes: e.target.value})} placeholder="Notas (Motivo)" className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border" />
-                            <button onClick={handleManualSubmit} disabled={isProcessing} className="w-full py-6 bg-rr-orange text-white rounded-2xl font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
-                                {isProcessing ? <Loader2 className="animate-spin"/> : "Confirmar Carga Directa"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {selectedRequestId && selectedRequestData.req && (
-                <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-xl rounded-[3rem] p-10 shadow-2xl relative animate-scale-in">
-                        <button onClick={() => setSelectedRequestId(null)} className="absolute top-8 right-8 text-gray-400 hover:text-red-500"><X size={32}/></button>
-                        <h2 className="text-2xl font-black uppercase text-rr-dark dark:text-white mb-2">Procesar: {selectedRequestData.emp?.lastName}</h2>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">Solicitud {formatDateDisplay(selectedRequestData.req.startDate)}</p>
-                        <textarea value={adminComment} onChange={(e) => setAdminComment(e.target.value)} placeholder="Escribe aquí el motivo del rechazo o un comentario..." className="w-full p-6 bg-gray-50 dark:bg-gray-900 rounded-2xl font-bold min-h-[140px] mb-6 border focus:ring-2 focus:ring-rr-orange outline-none" />
-                        <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => handleProcess('Rechazado')} disabled={isProcessing} className="flex items-center justify-center gap-3 py-6 bg-red-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest">
-                                {isProcessing ? <Loader2 className="animate-spin"/> : <XCircle size={20}/>} Rechazar
-                            </button>
-                            <button onClick={() => handleProcess('Aprobado')} disabled={isProcessing} className="flex items-center justify-center gap-3 py-6 bg-rr-orange text-white rounded-2xl font-black uppercase text-xs tracking-widest">
-                                {isProcessing ? <Loader2 className="animate-spin"/> : <Check size={20}/>} Aprobar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
