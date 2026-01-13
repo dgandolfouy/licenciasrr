@@ -15,7 +15,12 @@ import {
   Calendar,
   FileDown,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  // Agregamos los que faltaban del Login:
+  User,
+  Lock,
+  LogIn,
+  AlertTriangle
 } from 'lucide-react';
 
 export { 
@@ -35,5 +40,10 @@ export {
   Calendar, 
   FileDown,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  // Exportamos los del Login:
+  User,
+  Lock,
+  LogIn,
+  AlertTriangle
 };
