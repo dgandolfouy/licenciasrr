@@ -1,175 +1,151 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { UserRole } from '../types';
-import { LogOut, Settings, Sun, Moon, TrendingUp, Home, User, ShieldCheck, FileText, X, Mail, Clock } from './icons/LucideIcons';
-import { Logo } from './icons/Logo';
-import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
-
-// --- LAZY LOADING ---
-// Importamos los componentes de forma dinámica
-const EmployeeView = lazy(() => import('./EmployeeView'));
-const HRView = lazy(() => import('./HRView'));
-const StatsView = lazy(() => import('./StatsView'));
-const SettingsView = lazy(() => import('./SettingsView'));
-
-const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center py-20">
-        <div className="w-12 h-12 border-4 border-dashed rounded-full animate-spin border-rr-orange"></div>
-    </div>
-);
+import { 
+  LayoutDashboard, 
+  Users, 
+  Settings as SettingsIcon, 
+  LogOut, 
+  FileText, 
+  Menu, 
+  X 
+} from 'lucide-react';
+import StatsView from './StatsView';
+import EmployeeView from './EmployeeView';
+import HRView from './HRView';
+import SettingsView from './SettingsView';
 
 const Dashboard: React.FC = () => {
-    const { user, logout } = useAuth();
-    const { theme, toggleTheme } = useTheme();
-    const { settings, clearUnreadNews, getEmployeeById } = useData();
-    
-    const [view, setView] = useState<'home' | 'stats' | 'settings' | 'doc-view' | 'notifications'>('home');
-    const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
-    const [selectedMode, setSelectedMode] = useState<'COLABORADOR' | 'ADMINISTRADOR' | null>(null);
+  const { user, logout } = useAuth();
+  const { employees } = useData();
+  const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'settings'>('overview');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    useEffect(() => {
-        if (user) {
-            if (user.role === UserRole.OPERARIO) {
-                setSelectedMode('COLABORADOR');
-            }
-        }
-    }, [user]);
+  // Normalizamos el rol para evitar errores de mayúsculas/minúsculas
+  const isAdmin = user?.role?.toLowerCase() === 'admin';
+  const employeeData = employees.find(e => e.id === user?.id);
 
-    if (!user) return null;
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'overview':
+        // Si es Admin mostramos Estadísticas Globales
+        // Si es Empleado mostramos SU panel personal (EmployeeView)
+        return isAdmin ? <StatsView /> : <EmployeeView employee={employeeData} />;
+      case 'employees':
+        return isAdmin ? <HRView /> : null;
+      case 'settings':
+        return isAdmin ? <SettingsView /> : null;
+      default:
+        return <EmployeeView employee={employeeData} />;
+    }
+  };
 
-    const employee = getEmployeeById(user.id);
-    const hasUnread = employee?.hasUnreadNews;
-
-    const capitalize = (str: string) => {
-        if (!str) return 'Usuario';
-        return str.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-    };
-
-    const renderDocReader = () => {
-        const doc = settings.qualityDocs.find(d => d.id === selectedDocId);
-        if (!doc) return null;
-        return (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-10 animate-fade-in">
-                <div className="bg-white dark:bg-gray-800 w-full max-w-4xl rounded-[3rem] shadow-2xl relative border dark:border-gray-700 flex flex-col max-h-[85vh] overflow-hidden">
-                    <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                            <FileText className="text-rr-orange" size={24}/>
-                            <h2 className="text-lg font-black uppercase tracking-tight text-rr-dark dark:text-white">{doc.title}</h2>
-                        </div>
-                        <button onClick={() => setView('home')} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button>
-                    </div>
-                    <div className="p-10 sm:p-14 overflow-y-auto custom-scrollbar font-medium leading-relaxed whitespace-pre-wrap text-gray-600 dark:text-gray-300">
-                        {doc.content}
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const renderNotifications = () => {
-        return (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-10 animate-fade-in">
-                <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-[3rem] shadow-2xl relative border dark:border-gray-700 flex flex-col max-h-[80vh] overflow-hidden">
-                    <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                            <Mail className="text-rr-orange" size={24}/>
-                            <h2 className="text-lg font-black uppercase tracking-tight text-rr-dark dark:text-white">Comunicados</h2>
-                        </div>
-                        <button onClick={() => { setView('home'); if (user.id) clearUnreadNews(user.id); }} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button>
-                    </div>
-                    <div className="p-8 overflow-y-auto space-y-4">
-                        {settings.newsHistory.length === 0 ? (
-                            <p className="text-center text-gray-400 py-10">No hay mensajes anteriores</p>
-                        ) : (
-                            settings.newsHistory.map(news => (
-                                <div key={news.id} className="p-6 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-[10px] font-black text-rr-orange uppercase tracking-widest">{news.author}</span>
-                                        <span className="text-[9px] font-bold text-gray-400 flex items-center gap-1"><Clock size={10}/> {new Date(news.date).toLocaleDateString('es-UY')}</span>
-                                    </div>
-                                    <p className="text-gray-600 dark:text-gray-300 font-bold italic">"{news.content}"</p>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const renderRoleSelection = () => (
-        <div className="flex flex-col items-center justify-center min-h-[70vh] animate-fade-in text-center space-y-12">
-            <Logo className="w-64 h-auto" />
-            <div className="space-y-3">
-                <h2 className="text-4xl sm:text-6xl font-black text-rr-dark dark:text-white tracking-tighter">
-                    ¡Hola, <span className="text-rr-orange">{capitalize(user.name?.split(' ')[0] || 'Usuario')}</span>!
-                </h2>
-                <p className="text-gray-400 font-bold uppercase tracking-[0.4em] text-[10px] opacity-70">Selecciona el área de trabajo</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-2xl px-4">
-                <button onClick={() => setSelectedMode('COLABORADOR')} className="group bg-white dark:bg-gray-800 p-12 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-700 hover:border-rr-orange transition-all flex flex-col items-center gap-6">
-                    <User size={56} className="text-gray-200 group-hover:text-rr-orange transition-colors" />
-                    <h3 className="text-lg font-black uppercase text-rr-dark dark:text-white tracking-widest">Portal Personal</h3>
-                </button>
-                {(user.role === UserRole.ADMIN || user.role === UserRole.RRHH) && (
-                    <button onClick={() => setSelectedMode('ADMINISTRADOR')} className="group bg-rr-dark p-12 rounded-[3rem] shadow-xl border border-transparent hover:border-rr-orange transition-all flex flex-col items-center gap-6 text-white">
-                        <ShieldCheck size={56} className="text-gray-600 group-hover:text-rr-orange transition-colors" />
-                        <h3 className="text-lg font-black uppercase tracking-widest">Administración</h3>
-                    </button>
-                )}
-            </div>
+  return (
+    <div className="flex h-screen bg-gray-100 font-sans overflow-hidden">
+      
+      {/* BARRA LATERAL (SIDEBAR) - Visible para TODOS */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-rr-dark text-white transform transition-transform duration-300 ease-in-out shadow-2xl
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:relative md:translate-x-0
+      `}>
+        {/* Logo */}
+        <div className="p-6 flex items-center gap-3 border-b border-gray-800">
+          <div className="bg-white text-rr-dark font-black text-xl p-2 rounded-lg h-10 w-10 flex items-center justify-center">RR</div>
+          <div>
+            <h1 className="font-bold text-lg leading-none">Etiquetas</h1>
+            <span className="text-[10px] text-gray-400 tracking-wider">PANEL DE CONTROL</span>
+          </div>
+          <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden ml-auto text-gray-400">
+            <X size={24} />
+          </button>
         </div>
-    );
 
-    const renderMainView = () => {
-        if (view === 'doc-view') return renderDocReader();
-        if (view === 'notifications') return renderNotifications();
-        if (view === 'stats') return <StatsView />;
-        if (view === 'settings') return <SettingsView onBack={() => setView('home')} />;
-        if (selectedMode === 'COLABORADOR') return <EmployeeView />;
-        if (selectedMode === 'ADMINISTRADOR') return <HRView />;
-        return renderRoleSelection();
-    };
+        {/* Menú de Navegación */}
+        <nav className="p-4 space-y-2">
+          
+          {/* BOTÓN 1: MI PANEL (Para todos) */}
+          <button
+            onClick={() => { setActiveTab('overview'); setIsMobileMenuOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+              activeTab === 'overview' 
+                ? 'bg-rr-orange text-white shadow-lg shadow-orange-900/20 font-bold' 
+                : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+            }`}
+          >
+            <LayoutDashboard size={20} />
+            <span>Mi Panel</span>
+          </button>
 
-    return (
-        <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-[#111] transition-colors duration-300">
-            <header className="bg-white/90 dark:bg-[#111]/90 backdrop-blur-lg shadow-sm sticky top-0 z-[60] border-b dark:border-gray-800">
-                <div className="container mx-auto px-6 h-20 flex items-center justify-between">
-                    <div className="flex items-center gap-4 cursor-pointer" onClick={() => { setView('home'); if(user.role !== UserRole.OPERARIO) setSelectedMode(null); }}>
-                        <Logo className="h-10 w-auto" />
-                    </div>
-                    <div className="flex items-center gap-3">
-                        {selectedMode && (
-                            <>
-                              <button onClick={() => setView('home')} className={`p-3 rounded-xl ${view === 'home' ? 'bg-rr-orange text-white' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}><Home size={20} /></button>
-                              <button onClick={() => setView('notifications')} className={`p-3 rounded-xl relative ${view === 'notifications' ? 'bg-rr-orange text-white' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
-                                <Mail size={20} />
-                                {hasUnread && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>}
-                              </button>
-                            </>
-                        )}
-                        {selectedMode === 'ADMINISTRADOR' && (
-                            <>
-                                <button onClick={() => setView('stats')} className={`p-3 rounded-xl ${view === 'stats' ? 'bg-rr-orange text-white' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}><TrendingUp size={20} /></button>
-                                <button onClick={() => setView('settings')} className={`p-3 rounded-xl ${view === 'settings' ? 'bg-rr-orange text-white' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}><Settings size={20} /></button>
-                            </>
-                        )}
-                        <button onClick={toggleTheme} className="p-3 text-gray-400 hover:text-rr-orange">{theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}</button>
-                        <button onClick={logout} className="p-3 text-red-400 hover:bg-red-50 rounded-xl"><LogOut size={20} /></button>
-                    </div>
-                </div>
-            </header>
-            <main className="flex-grow container mx-auto px-6 py-10">
-                <Suspense fallback={<LoadingSpinner />}>
-                    {renderMainView()}
-                </Suspense>
-            </main>
-            <footer className="bg-rr-dark py-12">
-                <p className="text-[10px] font-black text-gray-600 uppercase tracking-[0.5em] text-center">RR Etiquetas Uruguay • 2025</p>
-            </footer>
+          {/* SECCIÓN SOLO ADMINS */}
+          {isAdmin && (
+            <>
+              <div className="pt-4 pb-2 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                Administración
+              </div>
+
+              <button
+                onClick={() => { setActiveTab('employees'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  activeTab === 'employees' 
+                    ? 'bg-rr-orange text-white shadow-lg shadow-orange-900/20 font-bold' 
+                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                }`}
+              >
+                <Users size={20} />
+                <span>Empleados</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('settings'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  activeTab === 'settings' 
+                    ? 'bg-rr-orange text-white shadow-lg shadow-orange-900/20 font-bold' 
+                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                }`}
+              >
+                <SettingsIcon size={20} />
+                <span>Ajustes</span>
+              </button>
+            </>
+          )}
+        </nav>
+
+        {/* Botón Salir */}
+        <div className="absolute bottom-0 left-0 w-full p-4 border-t border-gray-800">
+          <button 
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            <LogOut size={20} />
+            <span className="font-medium">Cerrar Sesión</span>
+          </button>
         </div>
-    );
+      </aside>
+
+      {/* CONTENIDO PRINCIPAL */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+        {/* Header Móvil */}
+        <header className="md:hidden bg-white p-4 flex items-center justify-between shadow-sm z-10">
+          <div className="flex items-center gap-2">
+             <div className="bg-rr-dark text-white font-black text-sm p-1.5 rounded h-8 w-8 flex items-center justify-center">RR</div>
+             <span className="font-bold text-rr-dark">Control de Licencias</span>
+          </div>
+          <button onClick={() => setIsMobileMenuOpen(true)} className="text-rr-dark p-2">
+            <Menu size={24} />
+          </button>
+        </header>
+
+        {/* Área de Scroll */}
+        <div className="flex-1 overflow-y-auto bg-gray-100 p-4 md:p-8">
+          <div className="max-w-7xl mx-auto">
+            {renderContent()}
+          </div>
+        </div>
+      </main>
+
+    </div>
+  );
 };
 
 export default Dashboard;
