@@ -1,12 +1,14 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { User, UserRole } from '../types';
+import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { supabase } from '../services/supabaseClient';
+
+// Usamos 'any' para evitar peleas con TypeScript por ahora
+type User = any;
 
 interface AuthContextType {
   user: User | null;
-  login: (id: string, password?: string) => Promise<boolean>;
-  logout: () => void;
   loading: boolean;
+  login: (id: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,76 +18,57 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user_session');
+    // Al abrir la app, revisamos si ya estaba logueado de antes
+    const storedUser = localStorage.getItem('rr_user_session');
     if (storedUser) {
-        setUser(JSON.parse(storedUser));
+      setUser(JSON.parse(storedUser));
     }
     setLoading(false);
   }, []);
 
-  const login = async (id: string, password?: string): Promise<boolean> => {
+  const login = async (id: string, pass: string) => {
     try {
-      console.log(`[Auth] Intentando login para ID: ${id}`);
-      
-      // 1. Buscamos el usuario en Supabase
+      // AQUÍ ESTÁ LA MAGIA: Buscamos directo en tu tabla
       const { data, error } = await supabase
         .from('employees')
-        .select('id, name, lastName, password, role')
+        .select('*')
         .eq('id', id)
+        .eq('password', pass)
         .maybeSingle();
 
       if (error) {
-        console.error('[Auth] Error conectando con Supabase:', error.message);
-        return false;
+          console.error("Error Supabase:", error);
+          return { success: false, error: 'Error de conexión' };
       }
 
-      if (!data) {
-        console.warn('[Auth] Usuario no encontrado en la base de datos.');
-        return false;
-      }
-      
-      console.log('[Auth] Usuario encontrado. Verificando contraseña...');
-
-      // 2. Verificamos la contraseña (texto plano según tu lógica actual)
-      // Convertimos a String para asegurar comparación segura
-      if (String(data.password).trim() === String(password).trim()) {
-        const userToSave: User = {
-          id: data.id,
-          name: data.name,
-          lastName: data.lastName,
-          role: data.role as UserRole,
-        };
-        setUser(userToSave);
-        localStorage.setItem('user_session', JSON.stringify(userToSave));
-        console.log('[Auth] Login exitoso.');
-        return true;
+      if (data) {
+        // ¡Encontrado! Guardamos al usuario y damos el OK
+        setUser(data);
+        localStorage.setItem('rr_user_session', JSON.stringify(data)); 
+        return { success: true };
       } else {
-        console.warn('[Auth] Contraseña incorrecta.');
+        // No se encontró coincidencia
+        return { success: false, error: 'Credenciales incorrectas' };
       }
-      
-      return false;
-    } catch (e) {
-      console.error('[Auth] Error inesperado:', e);
-      return false;
+    } catch (err) {
+      return { success: false, error: 'Error inesperado' };
     }
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('user_session');
+    localStorage.removeItem('rr_user_session');
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
-      {!loading && children}
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
+      {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = (): AuthContextType => {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error("useAuth debe usarse dentro de AuthProvider");
   return context;
 };
