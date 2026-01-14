@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Logo } from './icons/Logo';
 import { LogIn, User, Lock, AlertTriangle, Eye, EyeOff } from './icons/LucideIcons';
+import { useNavigate } from 'react-router-dom';
 
 const LoginPage: React.FC = () => {
   const [id, setId] = useState('');
@@ -10,95 +9,113 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
-    try {
-      const success = await login(id, password);
-      if (!success) {
-        setError('Acceso denegado. Verifica tus credenciales.');
-      }
-    } catch (err) {
-      setError('Error de conexión.');
-    } finally {
-      setLoading(false);
+
+    // Llamamos a nuestro nuevo login que busca en la tabla
+    const result = await login(id, password);
+
+    if (result.success) {
+      // Si entra, redirigimos según si es admin o no (la lógica de rutas lo manejará)
+      navigate('/dashboard'); 
+    } else {
+      setError(result.error || 'Error al ingresar');
     }
+    setLoading(false);
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-rr-dark transition-colors duration-500 p-4">
-      <div className="w-full max-w-sm sm:max-w-md p-6 sm:p-10 space-y-8 sm:space-y-12 bg-white dark:bg-gray-800 rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl border border-gray-100 dark:border-gray-700 animate-fade-in relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-2 bg-rr-orange" />
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-xl w-full max-w-sm relative overflow-hidden">
         
-        <div className="flex flex-col items-center gap-4 sm:gap-6">
-          <Logo className="w-56 sm:w-64 h-auto" />
-          <div className="text-center space-y-1">
-            <h2 className="text-xl sm:text-2xl font-black text-rr-dark dark:text-white uppercase tracking-tighter leading-tight flex flex-col items-center">
-              <span>Control de</span>
-              <span>Licencias</span>
-            </h2>
-          </div>
+        {/* Header Naranja Decorativo */}
+        <div className="absolute top-0 left-0 w-full h-3 bg-rr-orange"></div>
+
+        {/* LOGO */}
+        <div className="flex flex-col items-center mb-8 mt-4">
+            <div className="flex items-center gap-2 mb-2">
+                <div className="bg-black text-white font-black text-3xl p-3 rounded-full h-16 w-16 flex items-center justify-center">RR</div>
+                <div className="flex flex-col">
+                    <span className="text-rr-orange font-bold text-xl leading-none">Etiquetas</span>
+                    <div className="h-0.5 bg-rr-orange w-full mt-1"></div>
+                </div>
+            </div>
+            <span className="text-xs font-medium text-gray-500 tracking-wider">A Beontag Company</span>
         </div>
 
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div className="relative group">
-              <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase ml-4 mb-2 block tracking-widest">Cédula de Identidad</label>
-              <div className="absolute left-5 top-[44px] text-gray-300 group-focus-within:text-rr-orange transition-colors">
-                <User size={18} />
-              </div>
-              <input
-                type="text"
-                required
-                className="w-full pl-14 pr-6 py-4 bg-gray-50 dark:bg-gray-700/50 border-none rounded-2xl text-rr-dark dark:text-white font-bold placeholder-gray-300 focus:ring-2 focus:ring-rr-orange outline-none transition-all"
-                placeholder="Sin puntos ni guiones"
-                value={id}
-                onChange={(e) => setId(e.target.value)}
-              />
-            </div>
+        <h1 className="text-2xl font-black text-center text-rr-dark mb-8 uppercase tracking-wide">
+            Control de<br/>Licencias
+        </h1>
 
+        <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* INPUT USUARIO (CÉDULA) */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Cédula de Identidad</label>
             <div className="relative group">
-              <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase ml-4 mb-2 block tracking-widest">Contraseña Personal</label>
-              <div className="absolute left-5 top-[44px] text-gray-300 group-focus-within:text-rr-orange transition-colors">
-                <Lock size={18} />
-              </div>
-              <input
-                type={showPassword ? "text" : "password"}
-                required
-                className="w-full pl-14 pr-14 py-4 bg-gray-50 dark:bg-gray-700/50 border-none rounded-2xl text-rr-dark dark:text-white font-bold placeholder-gray-300 focus:ring-2 focus:ring-rr-orange outline-none transition-all"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-5 top-[44px] text-gray-400 hover:text-rr-orange transition-colors"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-300 group-focus-within:text-rr-orange transition-colors">
+                    <User size={20} />
+                </div>
+                <input
+                    type="text" 
+                    value={id}
+                    onChange={(e) => setId(e.target.value)}
+                    className="w-full bg-gray-50 text-rr-dark font-bold pl-12 pr-4 py-4 rounded-2xl border-2 border-transparent focus:border-rr-orange focus:bg-white transition-all outline-none"
+                    placeholder="40069799"
+                    required
+                />
             </div>
           </div>
 
+          {/* INPUT CONTRASEÑA */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Contraseña Personal</label>
+            <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-300 group-focus-within:text-rr-orange transition-colors">
+                    <Lock size={20} />
+                </div>
+                <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-gray-50 text-rr-dark font-bold pl-12 pr-12 py-4 rounded-2xl border-2 border-rr-orange/50 focus:border-rr-orange focus:bg-white transition-all outline-none"
+                    placeholder="••••••••"
+                    required
+                />
+                <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-rr-dark transition-colors"
+                >
+                    {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                </button>
+            </div>
+          </div>
+
+          {/* MENSAJE DE ERROR */}
           {error && (
-            <div className="flex items-center gap-2 p-4 bg-red-50 text-red-600 text-xs font-black rounded-2xl animate-shake">
-              <AlertTriangle size={18} />
-              <p className="uppercase tracking-widest">{error}</p>
+            <div className="bg-red-50 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold animate-fade-in">
+                <AlertTriangle size={18} className="shrink-0"/>
+                {error}
             </div>
           )}
 
+          {/* BOTÓN INGRESAR */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-5 bg-rr-orange hover:bg-rr-orange-dark text-white font-black rounded-2xl shadow-xl shadow-rr-orange/20 transition-all active:scale-95 disabled:opacity-50 uppercase tracking-[0.2em] text-xs"
+            className="w-full bg-rr-orange text-white font-black text-sm uppercase tracking-[0.2em] py-5 rounded-2xl shadow-lg shadow-orange-200 hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Iniciando..." : "Ingresar"}
+            {loading ? 'Verificando...' : 'Ingresar'}
           </button>
         </form>
+
       </div>
     </div>
   );
