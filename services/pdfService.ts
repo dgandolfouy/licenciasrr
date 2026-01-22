@@ -1,0 +1,240 @@
+
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { Employee, LeaveSettings } from '../types';
+import { getLeaveDaysSummary, getUnifiedHistory, formatLeaveLabel, UnifiedHistoryItem } from '../utils/leaveCalculator';
+
+const LOGO_SVG = `<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Camada_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 445.41 237.71">
+  <defs>
+    <style>
+      .st0, .st1 { fill-rule: evenodd; }
+      .st0, .st2 { fill: #1d1d1b; }
+      .st1 { fill: #ef7d00; }
+      .st3 { fill: #ec6608; }
+    </style>
+  </defs>
+  <g>
+    <path class="st2" d="M201.77,211.05h1.74l7.49,16.56h-2l-1.93-4.34h-8.95l-1.95,4.34h-1.9l7.49-16.56h0ZM206.35,221.59l-3.73-8.38-3.76,8.38h7.49,0Z"/>
+    <path class="st2" d="M221.28,211.16h7c1.88,0,3.36.54,4.3,1.46.68.71,1.06,1.57,1.06,2.63v.05c0,2.14-1.31,3.24-2.61,3.8,1.95.59,3.52,1.71,3.52,3.97v.05c0,2.82-2.37,4.49-5.96,4.49h-7.3v-16.44h0ZM231.76,215.51c0-1.62-1.29-2.68-3.64-2.68h-5v5.66h4.86c2.23,0,3.78-1.01,3.78-2.94v-.05h0ZM228.3,220.14h-5.19v5.8h5.52c2.49,0,4.04-1.1,4.04-2.94v-.05c0-1.79-1.5-2.82-4.37-2.82h0Z"/>
+    <path class="st2" d="M237.18,221.57v-.05c0-3.5,2.46-6.32,5.82-6.32,3.59,0,5.66,2.87,5.66,6.41,0,.24,0,.38-.02.59h-9.63c.26,2.63,2.11,4.11,4.27,4.11,1.67,0,2.84-.68,3.83-1.71l1.13,1.01c-1.22,1.36-2.7,2.28-5,2.28-3.33,0-6.06-2.56-6.06-6.32h0ZM246.83,220.86c-.19-2.21-1.46-4.13-3.88-4.13-2.11,0-3.71,1.76-3.95,4.13h7.83Z"/>
+    <path class="st2" d="M251.08,221.59v-.05c0-3.43,2.68-6.34,6.34-6.34s6.32,2.87,6.32,6.29v.05c0,3.43-2.7,6.34-6.36,6.34s-6.29-2.87-6.29-6.29h-.01ZM261.88,221.59v-.05c0-2.61-1.95-4.74-4.51-4.74s-4.44,2.14-4.44,4.7v.05c0,2.61,1.93,4.72,4.49,4.72s4.46-2.11,4.46-4.67h0Z"/>
+    <path class="st2" d="M267,215.46h1.81v2.11c.8-1.32,2.07-2.37,4.16-2.37,2.94,0,4.65,1.97,4.65,4.86v7.54h-1.81v-7.09c0-2.25-1.22-3.66-3.36-3.66s-3.64,1.53-3.64,3.8v6.95h-1.81v-12.14Z"/>
+    <path class="st2" d="M282.1,224.39v-7.33h-1.69v-1.6h1.69v-3.66h1.81v3.66h3.85v1.6h-3.85v7.09c0,1.48.82,2.02,2.04,2.02.61,0,1.13-.12,1.76-.42v1.55c-.63.33-1.31.52-2.18.52-1.95,0-3.43-.96-3.43-3.43h0Z"/>
+    <path class="st2" d="M290.03,224.08v-.05c0-2.56,2.11-3.92,5.19-3.92,1.55,0,2.65.21,3.73.52v-.42c0-2.18-1.34-3.31-3.62-3.31-1.43,0-2.56.38-3.69.89l-.54-1.48c1.34-.61,2.65-1.01,4.42-1.01s3.03.45,3.92,1.34c.82.82,1.24,2,1.24,3.55v7.42h-1.74v-1.83c-.85,1.1-2.25,2.09-4.39,2.09-2.25,0-4.53-1.29-4.53-3.78h0ZM298.98,223.14v-1.17c-.89-.26-2.09-.52-3.57-.52-2.28,0-3.55.99-3.55,2.51v.05c0,1.53,1.41,2.42,3.05,2.42,2.23,0,4.06-1.36,4.06-3.29h.01Z"/>
+    <path class="st2" d="M304.41,229.72l.82-1.41c1.39,1.01,2.94,1.55,4.67,1.55,2.68,0,4.42-1.48,4.42-4.32v-1.43c-1.06,1.41-2.54,2.56-4.77,2.56-2.91,0-5.71-2.18-5.71-5.68v-.05c0-3.55,2.82-5.73,5.71-5.73,2.28,0,3.76,1.13,4.74,2.44v-2.18h1.81v10.03c0,1.88-.56,3.31-1.55,4.3-1.08,1.08-2.7,1.62-4.63,1.62s-3.9-.56-5.52-1.69h0ZM314.36,220.96v-.05c0-2.49-2.16-4.11-4.46-4.11s-4.2,1.6-4.2,4.09v.05c0,2.44,1.95,4.13,4.2,4.13s4.46-1.67,4.46-4.11Z"/>
+    <path class="st2" d="M326.76,219.43v-.05c0-4.65,3.48-8.5,8.31-8.5,2.98,0,4.77,1.06,6.41,2.61l-1.27,1.36c-1.39-1.32-2.94-2.25-5.17-2.25-3.64,0-6.36,2.96-6.36,6.74v.05c0,3.8,2.75,6.79,6.36,6.79,2.25,0,3.73-.87,5.31-2.37l1.22,1.2c-1.71,1.74-3.59,2.89-6.58,2.89-4.74,0-8.24-3.73-8.24-8.45v-.02Z"/>
+    <path class="st2" d="M343.62,221.59v-.05c0-3.43,2.68-6.34,6.34-6.34s6.32,2.87,6.32,6.29v.05c0,3.43-2.7,6.34-6.36,6.34s-6.29-2.87-6.29-6.29h-.01ZM354.42,221.59v-.05c0-2.61-1.95-4.74-4.51-4.74s-4.44,2.14-4.44,4.7v.05c0,2.61,1.93,4.72,4.49,4.72s4.46-2.11,4.46-4.67h0Z"/>
+    <path class="st2" d="M359.54,215.46h1.81v2.04c.8-1.2,1.88-2.3,3.92-2.3s3.24,1.06,3.9,2.42c.87-1.34,2.16-2.42,4.27-2.42,2.79,0,4.51,1.88,4.51,4.88v7.51h-1.81v-7.09c0-2.35-1.17-3.66-3.15-3.66-1.83,0-3.36,1.36-3.36,3.76v7h-1.78v-7.14c0-2.28-1.2-3.62-3.12-3.62s-3.38,1.6-3.38,3.83v6.93h-1.81v-12.14h0Z"/>
+    <path class="st2" d="M381.8,215.46h1.81v2.44c.99-1.46,2.42-2.7,4.65-2.7,2.91,0,5.8,2.3,5.8,6.29v.05c0,3.97-2.86,6.32-5.8,6.32-2.25,0-3.71-1.22-4.65-2.58v6.08h-1.81v-15.9h0ZM392.2,221.57v-.05c0-2.87-1.97-4.7-4.27-4.7s-4.39,1.9-4.39,4.67v.05c0,2.82,2.14,4.7,4.39,4.7s4.27-1.74,4.27-4.67Z"/>
+    <path class="st2" d="M396.47,224.08v-.05c0-2.56,2.11-3.92,5.19-3.92,1.55,0,2.65.21,3.73.52v-.42c0-2.18-1.34-3.31-3.62-3.31-1.43,0-2.56.38-3.69.89l-.54-1.48c1.34-.61,2.65-1.01,4.42-1.01s3.03.45,3.92,1.34c.82.82,1.24,2,1.24,3.55v7.42h-1.74v-1.83c-.85,1.1-2.25,2.09-4.39,2.09-2.25,0-4.53-1.29-4.53-3.78h0ZM405.42,223.14v-1.17c-.89-.26-2.09-.52-3.57-.52-2.28,0-3.55.99-3.55,2.51v.05c0,1.53,1.41,2.42,3.05,2.42,2.23,0,4.06-1.36,4.06-3.29h.01Z"/>
+    <path class="st2" d="M410.98,215.46h1.81v2.11c.8-1.32,2.07-2.37,4.16-2.37,2.94,0,4.65,1.97,4.65,4.86v7.54h-1.81v-7.09c0-2.25-1.22-3.66-3.36-3.66s-3.64,1.53-3.64,3.8v6.95h-1.81v-12.14Z"/>
+    <path class="st2" d="M434.18,215.46h1.93l-5.1,12.54c-1.03,2.51-2.21,3.43-4.04,3.43-1.01,0-1.76-.21-2.58-.61l.61-1.43c.59.3,1.13.45,1.9.45,1.08,0,1.76-.56,2.49-2.28l-5.52-12.09h2l4.41,10.12,3.9-10.12h0Z"/>
+  </g>
+  <g>
+    <path class="st1" d="M312.16,3.22c-52.77,0-95.56,42.79-95.56,95.56s42.79,95.56,95.56,95.56v-3.19c-51.01,0-92.38-41.37-92.38-92.38S261.15,6.4,312.16,6.4v-3.19h0Z"/>
+    <path class="st0" d="M101.92,3.22C49.15,3.22,6.35,46.01,6.35,98.78s42.79,95.56,95.56,95.56,95.56-42.79,95.56-95.56S154.69,3.22,101.92,3.22ZM82.59,137.01c-7.81,0-11.25-5.46-13.67-9.31-2.47-4.18-5.08-8.62-7.83-13.4-2-3.49-2.28-5.71-2.28-9.7v-9.92h10.17c4.68-.01,9.27-4.1,9.28-9.01,0-4.61-4.23-8.36-9.81-8.36h-13.82v52.68c0,3.86-3.16,7.03-7.03,7.03h-15.19V60.55h40.04c16.36,0,25.95,11.68,26.2,23.54.22,10.01-6.02,20.16-17.59,23.51l18.53,29.4h-17.01.01ZM156.19,137.01c-7.81,0-11.25-5.46-13.67-9.31-2.47-4.18-5.09-8.62-7.83-13.4-2-3.49-2.28-5.71-2.28-9.7v-9.92h10.17c4.68-.01,9.28-4.1,9.28-9,0-4.61-4.23-8.36-9.81-8.36h-13.82v52.68c0,3.86-3.16,7.03-7.03,7.03h-15.19V60.55h40.04c16.36,0,25.95,11.68,26.2,23.54.22,10.01-6.02,20.16-17.59,23.51l18.53,29.4h-17.01,0Z"/>
+    <path class="st3" d="M430.5,108.13c0-.5-.14-.91-.43-1.23-.28-.32-.65-.58-1.11-.8-.46-.21-.99-.4-1.6-.56-.6-.16-1.23-.32-1.88-.47-.83-.23-1.63-.48-2.4-.78-.76-.3-1.44-.69-2.02-1.17-.58-.47-1.05-1.08-1.39-1.81-.34-.73-.52-1.62-.52-2.67,0-1.3.23-2.42.7-3.37.47-.95,1.09-1.74,1.88-2.37.79-.62,1.71-1.08,2.76-1.39,1.05-.3,2.15-.45,3.32-.45,1.42,0,2.75.11,4,.34,1.24.24,2.37.53,3.38.9v4.63c-.53-.18-1.08-.34-1.67-.49-.58-.16-1.17-.29-1.77-.4-.61-.11-1.2-.2-1.79-.28-.59-.07-1.15-.11-1.68-.11-.67,0-1.24.07-1.7.2-.46.12-.84.29-1.13.52-.29.21-.49.46-.62.75-.12.28-.19.57-.19.87,0,.53.14.97.42,1.3.28.34.67.61,1.16.81.5.21,1.02.38,1.56.52s1.07.27,1.58.4c.8.19,1.6.42,2.4.7.8.27,1.52.65,2.16,1.14.64.48,1.16,1.11,1.57,1.89.4.78.61,1.77.61,2.96,0,1.31-.25,2.46-.75,3.43-.49.97-1.19,1.79-2.07,2.43-.88.65-1.95,1.13-3.19,1.44-1.24.31-2.6.47-4.09.47s-2.79-.11-3.97-.34c-1.18-.24-2.15-.52-2.92-.88v-4.59c1.24.47,2.4.78,3.46.95,1.06.16,2.04.25,2.95.25.7,0,1.36-.06,1.97-.16.61-.11,1.14-.27,1.57-.49.44-.23.79-.51,1.05-.85.25-.34.38-.76.38-1.24M408.89,104.96c-.54-.13-1.16-.25-1.87-.34-.7-.11-1.42-.16-2.14-.16-1.39,0-2.49.27-3.3.83-.81.55-1.21,1.39-1.21,2.53,0,.52.09.98.28,1.38.18.39.43.72.74.97s.67.44,1.09.57c.42.13.85.2,1.32.2.57,0,1.12-.08,1.63-.23.52-.16.98-.34,1.42-.58.43-.23.82-.49,1.16-.78s.64-.57.88-.84v-3.55h0ZM409.34,112.4h-.1c-.32.34-.7.68-1.15,1.03-.44.35-.96.69-1.53,1s-1.21.56-1.92.75c-.7.2-1.47.29-2.28.29-1.11,0-2.13-.17-3.1-.52-.96-.34-1.78-.83-2.46-1.48-.69-.65-1.23-1.43-1.62-2.36-.39-.92-.59-1.94-.59-3.08,0-1.24.23-2.37.69-3.36.45-.99,1.09-1.83,1.9-2.52.82-.69,1.79-1.21,2.93-1.57,1.14-.36,2.39-.54,3.77-.54,1.01,0,1.93.07,2.78.2.84.13,1.59.28,2.23.46v-.94c0-.54-.09-1.06-.28-1.57-.18-.5-.47-.95-.88-1.34s-.94-.7-1.6-.93-1.46-.34-2.4-.34c-1.15,0-2.3.12-3.46.38-1.15.26-2.4.65-3.74,1.15v-4.44c1.17-.51,2.41-.9,3.72-1.17,1.32-.28,2.69-.42,4.13-.43,1.7,0,3.19.2,4.45.62,1.27.42,2.33.99,3.19,1.71.86.73,1.5,1.59,1.92,2.58.43.99.63,2.07.63,3.24v8.75c0,1.54.02,2.86.05,3.96s.07,2.09.1,2.95h-5.13l-.24-2.47h-.01ZM391.98,114.84c-.64.2-1.4.34-2.29.46-.88.11-1.71.16-2.48.16-1.95,0-3.55-.31-4.78-.94-1.24-.64-2.12-1.54-2.63-2.73-.37-.85-.55-2-.55-3.46v-12.04h-4.35v-4.68h4.35v-6.5h5.68v6.5h6.71v4.68h-6.71v11.3c0,.9.14,1.56.41,1.99.47.74,1.43,1.11,2.85,1.11.66,0,1.31-.05,1.96-.16s1.26-.24,1.83-.39v4.7h0ZM251.14,109.95h15.78v4.92h-21.66v-32.1h20.8v4.92h-14.92v8.29h12.81v4.92h-12.81v9.04h0Z"/>
+      </g>
+    </svg>
+  `;
+
+const orange = '#ef7d00';
+
+const svgToPngDataUrl = (svgStr: string, width: number, height: number): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    const svgBase64 = btoa(unescape(encodeURIComponent(svgStr)));
+    img.src = `data:image/svg+xml;base64,${svgBase64}`;
+    
+    img.onload = () => {
+      ctx?.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = (e) => reject(e);
+  });
+};
+
+const addLogo = async (doc: jsPDF) => {
+    doc.setFillColor('#f9fafb');
+    doc.rect(0, 0, doc.internal.pageSize.width, 45, 'F');
+    doc.setDrawColor(orange);
+    doc.setLineWidth(1.5);
+    doc.line(0, 45, doc.internal.pageSize.width, 45);
+
+    const logoWidth = 50; 
+    const logoHeight = (logoWidth * 237.71) / 445.41;
+    
+    try {
+        const pngDataUrl = await svgToPngDataUrl(LOGO_SVG, 445, 237);
+        doc.addImage(pngDataUrl, 'PNG', 20, 10, logoWidth, logoHeight);
+    } catch (e) {
+        doc.setFontSize(14);
+        doc.setTextColor(orange);
+        doc.text("RR Etiquetas", 20, 25);
+    }
+};
+
+interface DateRange {
+    start: string;
+    end: string;
+}
+
+const formatDateTitle = (range?: DateRange) => {
+    if (!range) return '';
+    const format = (d: string) => d.split('-').reverse().join('/');
+    return `(${format(range.start)} - ${format(range.end)})`;
+};
+
+export const generateEmployeeReport = async (employee: Employee, globalAgreedDays: any[] = [], dateRange?: DateRange) => {
+  const doc = new jsPDF();
+  // FIXED: Pasamos globalAgreedDays para que getLeaveDaysSummary calcule bien el saldo
+  const summary = getLeaveDaysSummary(employee, new Date().getFullYear(), globalAgreedDays);
+
+  await addLogo(doc);
+  
+  doc.setTextColor('#f3f4f6');
+  doc.setFontSize(60);
+  doc.text('RR', 150, 100, { angle: 45, opacity: 0.1 } as any);
+
+  doc.setFontSize(8);
+  doc.setTextColor('#9ca3af');
+  doc.text(`Generado el: ${new Date().toLocaleString('es-UY')}`, 195, 12, { align: 'right' });
+
+  doc.setFontSize(18);
+  doc.setTextColor('#1d1d1b');
+  doc.setFont('helvetica', 'bold');
+  const title = dateRange ? `FICHA DE LICENCIAS ${formatDateTitle(dateRange)}` : 'FICHA DE LICENCIAS';
+  doc.text(title, 20, 60);
+
+  doc.setFillColor('#fdfdfd');
+  doc.roundedRect(20, 70, 170, 42, 3, 3, 'F');
+  doc.setFontSize(10);
+  doc.setTextColor('#374151');
+  doc.setFont('helvetica', 'bold');
+  doc.text('INFORMACIÓN DEL COLABORADOR', 25, 78);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Colaborador:`, 25, 87);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`${employee.lastName}, ${employee.name}`, 65, 87);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Documento (C.I.):`, 25, 93);
+  doc.text(`${employee.id}`, 65, 93);
+  doc.text(`Tipo:`, 25, 99);
+  doc.text(`${employee.type || 'Mensual'}`, 65, 99);
+  
+  doc.text(`Ingreso:`, 120, 87);
+  doc.text(`${new Date(employee.hireDate + 'T00:00:00').toLocaleDateString('es-UY')}`, 155, 87);
+  
+  doc.text(`Antigüedad:`, 120, 93);
+  doc.text(`${summary.yearsOfService} años`, 155, 93);
+
+  const totalTakenDisplay = summary.takenDays + summary.fixedDeductions;
+
+  autoTable(doc, {
+    startY: 118,
+    head: [['Generados', 'Gozados (Inc. Acuerdos)', 'Saldo Disponible']],
+    body: [[
+        `${summary.totalGenerated} d`,
+        `${totalTakenDisplay} d`,
+        { content: `${summary.remainingDays} días`, styles: { fontStyle: 'bold' as any, textColor: '#ef7d00', fontSize: 13 } }
+    ]],
+    theme: 'grid',
+    headStyles: { fillColor: '#1d1d1b', halign: 'center' },
+    bodyStyles: { halign: 'center', minCellHeight: 12, fontSize: 11 }
+  });
+  
+  let historyList = getUnifiedHistory(employee, globalAgreedDays);
+
+  if (dateRange && dateRange.start && dateRange.end) {
+      historyList = historyList.filter(r => 
+          r.startDate >= dateRange.start && r.startDate <= dateRange.end
+      );
+  }
+
+  const historyRows = historyList.map(r => [
+      new Date(r.startDate + 'T00:00:00').toLocaleDateString('es-UY'),
+      `${r.days}`,
+      formatLeaveLabel(r.type, r.notes),
+      r.status.toUpperCase(), 
+      r.notes || '-'
+  ]);
+
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable.finalY + 20,
+    head: [['Fecha', 'Cant.', 'Tipo', 'Estado', 'Detalle']],
+    body: historyRows.length > 0 ? historyRows : [['-', '-', 'Sin registros en este período', '-', '-']],
+    theme: 'striped',
+    headStyles: { fillColor: '#ef7d00' },
+    columnStyles: {
+        3: { fontStyle: 'bold' as any } 
+    },
+    didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 3) {
+            const status = data.cell.raw as string;
+            if (status === 'RECHAZADO') data.cell.styles.textColor = '#ef4444'; 
+            if (status === 'PENDIENTE') data.cell.styles.textColor = '#eab308'; 
+            if (status === 'APROBADO') data.cell.styles.textColor = '#22c55e'; 
+        }
+    }
+  });
+
+  doc.save(`Ficha_RR_${employee.lastName}.pdf`);
+};
+
+export const generateGeneralReport = async (employees: Employee[], dateRange?: DateRange, globalAgreedDays: any[] = []) => {
+    const doc = new jsPDF('landscape');
+    await addLogo(doc);
+    
+    doc.setFontSize(16);
+    doc.setTextColor('#1d1d1b');
+    doc.setFont('helvetica', 'bold');
+    
+    let title = 'REPORTE CONSOLIDADO DE LICENCIAS';
+    if(dateRange && dateRange.start && dateRange.end) {
+        title += ` ${formatDateTitle(dateRange)}`;
+    }
+    doc.text(title, 20, 60);
+    
+    const body = employees
+        .sort((a, b) => a.lastName.localeCompare(b.lastName))
+        .map(emp => {
+            // FIXED: Pasamos globalAgreedDays aquí también
+            const sum = getLeaveDaysSummary(emp, new Date().getFullYear(), globalAgreedDays);
+            
+            let daysTakenInRange = 0;
+            if (dateRange) {
+                const history = getUnifiedHistory(emp, globalAgreedDays);
+                daysTakenInRange = history
+                    .filter(h => h.status === 'Aprobado' && h.startDate >= dateRange.start && h.startDate <= dateRange.end)
+                    .reduce((acc, curr) => acc + curr.days, 0);
+            }
+
+            const displayTaken = dateRange ? daysTakenInRange : (sum.takenDays + sum.fixedDeductions);
+
+            return [
+                `${emp.lastName}, ${emp.name}`,
+                emp.id,
+                emp.type || 'Mensual',
+                dateRange ? '-' : sum.totalGenerated,
+                displayTaken,
+                { content: sum.remainingDays, styles: { textColor: sum.remainingDays < 0 ? '#ef4444' : '#1d1d1b', fontStyle: 'bold' as any } }
+            ];
+        });
+
+    autoTable(doc, {
+        startY: 68,
+        head: [['Colaborador', 'Documento', 'Tipo', dateRange ? 'Gen. (N/A)' : 'Generados', dateRange ? 'Gozados (Rango)' : 'Gozados (Año)', 'Saldo Actual']],
+        body: body,
+        theme: 'grid',
+        headStyles: { fillColor: '#1d1d1b', fontSize: 10 }
+    });
+
+    doc.save(`Reporte_General_RR_${new Date().getFullYear()}.pdf`);
+};
