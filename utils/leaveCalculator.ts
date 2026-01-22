@@ -1,4 +1,3 @@
-
 import { Employee, LeaveRecord, AgreedDay, LeaveRequest } from '../types';
 
 const BASE_LEAVE_DAYS = 20;
@@ -77,6 +76,40 @@ export const calculateSeniorityDays = (hireDateStr: string, referenceDate: Date 
   return years < 5 ? 0 : 1 + Math.floor((years - 5) / 4);
 };
 
+// Calcula los días base generados (20 o proporcional según fecha ingreso)
+export const calculateBaseGeneratedDays = (hireDateStr: string, targetYear: number): number => {
+    if (!hireDateStr) return 0;
+    const hireDate = parseDate(hireDateStr);
+    const generationYear = targetYear - 1;
+
+    // Caso 1: Ingresó DESPUÉS del año de generación (ej: entró en 2025 y estamos calculando saldo disponible para 2025).
+    // No generó licencia en 2024. Su saldo es 0.
+    if (hireDate.getFullYear() > generationYear) {
+        return 0;
+    }
+
+    // Caso 2: Ingresó ANTES del año de generación (ej: entró en 2023 y calculamos saldo 2025).
+    // Trabajó todo el 2024 completo. Le corresponden los 20 días base.
+    if (hireDate.getFullYear() < generationYear) {
+        return BASE_LEAVE_DAYS;
+    }
+
+    // Caso 3: Ingresó DURANTE el año de generación (ej: entró en Junio 2024 y calculamos saldo 2025).
+    // Corresponde proporcional: 1.66 días por mes trabajado hasta el 31/12.
+    // Usamos cálculo exacto por días para mayor precisión matemática equivalente a 20/12.
+    const endOfYear = new Date(generationYear, 11, 31);
+    
+    // Calculamos días corridos trabajados en ese año
+    const diffTime = Math.abs(endOfYear.getTime() - hireDate.getTime());
+    const daysWorked = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 para incluir el día de ingreso
+
+    // Regla: (DíasTrabajados / 365) * 20
+    const proportional = (daysWorked / 365) * BASE_LEAVE_DAYS;
+
+    // Redondeamos a 2 decimales para que sea legible (ej: 11.66)
+    return parseFloat(proportional.toFixed(2));
+};
+
 export const getLeaveDaysSummary = (
   employee: Employee | undefined, 
   targetYear: number = new Date().getFullYear(),
@@ -86,18 +119,21 @@ export const getLeaveDaysSummary = (
   if (!employee) return empty;
 
   try {
+      // 1. Calcular Saldo Generado (Proporcional + Antigüedad)
+      const baseDays = calculateBaseGeneratedDays(employee.hireDate, targetYear);
       const seniorityDays = calculateSeniorityDays(employee.hireDate);
-      const totalGenerated = BASE_LEAVE_DAYS + seniorityDays;
+      
+      const totalGenerated = baseDays + seniorityDays;
       const availablePool = totalGenerated;
 
-      // 1. Identificar Días Acordados Activos para el año
+      // 2. Identificar Días Acordados Activos para el año
       const yearGlobalAgreed = (globalAgreedDays || []).filter(d => d.active && d.date.startsWith(targetYear.toString()));
       
       // Creamos un Set de fechas acordadas para búsqueda rápida O(1)
       const agreedDatesSet = new Set(yearGlobalAgreed.map(d => d.date));
       const fixedCount = agreedDatesSet.size;
 
-      // 2. Calcular días tomados
+      // 3. Calcular días tomados
       let takenCount = 0;
       
       (employee.leaveRecords || []).forEach(r => {
@@ -129,14 +165,15 @@ export const getLeaveDaysSummary = (
           }
       });
 
-      const remainingDays = availablePool - fixedCount - takenCount;
+      // Cálculo final con decimales permitidos
+      const remainingDays = parseFloat((availablePool - fixedCount - takenCount).toFixed(2));
 
       return {
-        totalGenerated, 
+        totalGenerated: parseFloat(totalGenerated.toFixed(2)), 
         fixedDeductions: fixedCount, 
         takenDays: takenCount, 
         remainingDays, 
-        availablePool, 
+        availablePool: parseFloat(availablePool.toFixed(2)), 
         yearsOfService: calculateYearsOfService(employee.hireDate),
         agreedRecords: yearGlobalAgreed
       };
