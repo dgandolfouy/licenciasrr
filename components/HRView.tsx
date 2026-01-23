@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { formatDateDisplay, calculateWorkingDays, getLeaveDaysSummary, formatLeaveLabel } from '../utils/leaveCalculator';
 import { Plus, X, CheckCircle2, Send, XCircle, Check, Loader2, Calendar, ChevronLeft, ChevronRight, Search, User, AlertCircle, Award } from './icons/LucideIcons';
+import { useToast } from '../context/ToastContext';
 
 // Subcomponente Heatmap para RRHH
 const HRHeatmap: React.FC = () => {
@@ -85,6 +86,7 @@ const HRHeatmap: React.FC = () => {
 const HRView: React.FC = () => {
     const { user } = useAuth();
     const { employees, processRequest, publishNews, addManualLeave, isSaving, settings, certifyLeaveRecord } = useData();
+    const { showToast } = useToast();
     
     const [selectedRequestId, setSelectedRequestId] = useState<{empId: string, reqId: string} | null>(null);
     const [adminComment, setAdminComment] = useState('');
@@ -149,7 +151,7 @@ const HRView: React.FC = () => {
         if (!selectedRequestId) return;
         
         if (status === 'Rechazado' && !adminComment.trim()) {
-            alert("⚠️ MOTIVO OBLIGATORIO: Debes escribir por qué rechazas la solicitud.");
+            showToast("Debes escribir por qué rechazas la solicitud.", 'error');
             return;
         }
 
