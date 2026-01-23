@@ -1,11 +1,12 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Trash2, X, Check, Search, Edit, Save, CalendarPlus, AlertTriangle, ShieldCheck, Loader2, UserPlus, FileDown, Archive, History, ArrowLeft, Filter, Sparkles, CheckCircle2, Lock, ShieldAlert, KeyRound } from './icons/LucideIcons';
-import { Employee, UserRole } from '../types';
-import { formatDateDisplay, getUnifiedHistory, formatLeaveLabel } from '../utils/leaveCalculator';
+import { Employee, LeaveRecord, UserRole } from '../types';
+import { formatDateDisplay, getUnifiedHistory, formatLeaveLabel, calculateWorkingDays } from '../utils/leaveCalculator';
 import { generateEmployeeReport, generateGeneralReport } from '../services/pdfService';
+import { useToast } from '../context/ToastContext';
 
 // Subcomponente: Formulario de Empleado (Crear/Editar)
 const EmployeeForm: React.FC<{ 
@@ -82,10 +83,23 @@ const EmployeeDetail: React.FC<{
     onToggleActive: () => void,
     settings: any
 }> = ({ employee, onBack, onEdit, onToggleActive, settings }) => {
+    const { deleteLeaveRecord, updateLeaveRecord, isSaving } = useData();
     const currentYear = new Date().getFullYear();
     const [dateRange, setDateRange] = useState({
         start: `${currentYear}-01-01`,
         end: `${currentYear}-12-31`
+    });
+
+    // Estado para los modales
+    const [editingRecord, setEditingRecord] = useState<any | null>(null);
+    const [deletingRecord, setDeletingRecord] = useState<any | null>(null);
+    
+    const [editData, setEditData] = useState({
+        start: '',
+        end: '',
+        type: 'Anual',
+        notes: '',
+        days: 0
     });
 
     const history = useMemo(() => {
@@ -96,8 +110,46 @@ const EmployeeDetail: React.FC<{
         return list;
     }, [employee, settings.agreedLeaveDays, dateRange]);
 
+    useEffect(() => {
+        if (editingRecord) {
+            setEditData({
+                start: editingRecord.startDate,
+                end: editingRecord.endDate,
+                type: editingRecord.type === 'Acordado' ? 'Anual' : editingRecord.type,
+                notes: editingRecord.notes || '',
+                days: editingRecord.days
+            });
+        }
+    }, [editingRecord]);
+
+    useEffect(() => {
+        if (editData.start && editData.end) {
+            const d = calculateWorkingDays(editData.start, editData.end, []);
+            setEditData(prev => ({ ...prev, days: d }));
+        }
+    }, [editData.start, editData.end]);
+
+    const handleConfirmDelete = async () => {
+        if (deletingRecord) {
+            await deleteLeaveRecord(employee.id, deletingRecord.id);
+            setDeletingRecord(null);
+        }
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingRecord) return;
+        await updateLeaveRecord(employee.id, editingRecord.id, {
+            startDate: editData.start,
+            endDate: editData.end,
+            type: editData.type as any,
+            notes: editData.notes,
+            days: editData.days
+        });
+        setEditingRecord(null);
+    };
+
     return (
-        <div className="space-y-8 animate-slide-in">
+        <div className="space-y-8 animate-slide-in relative">
             <div className="flex items-center gap-4">
                 <button onClick={onBack} className="p-3 bg-gray-100 dark:bg-white/10 rounded-xl hover:bg-gray-200"><ArrowLeft size={20}/></button>
                 <h3 className="text-2xl font-black uppercase text-rr-dark dark:text-white">{employee.lastName}, {employee.name}</h3>
@@ -105,6 +157,73 @@ const EmployeeDetail: React.FC<{
                     {employee.active ? 'Activo' : 'Archivado'}
                 </span>
             </div>
+
+            {/* MODAL DE EDICIÓN */}
+            {editingRecord && (
+                <div className="fixed inset-0 bg-black/90 z-[120] backdrop-blur-md flex items-center justify-center p-6 animate-scale-in">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl relative border-4 border-gray-100 dark:border-gray-700">
+                        <button onClick={() => setEditingRecord(null)} className="absolute top-6 right-6 text-gray-400 hover:text-red-500"><X size={24}/></button>
+                        <h3 className="text-2xl font-black text-rr-dark dark:text-white uppercase mb-8">Editar Registro</h3>
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-black uppercase ml-2 text-gray-400">Inicio</label>
+                                    <input type="date" value={editData.start} onChange={e => setEditData({...editData, start: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border-none" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-black uppercase ml-2 text-gray-400">Fin</label>
+                                    <input type="date" value={editData.end} onChange={e => setEditData({...editData, end: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border-none" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="col-span-2 space-y-1">
+                                    <label className="text-[9px] font-black uppercase ml-2 text-gray-400">Tipo</label>
+                                    <select value={editData.type} onChange={e => setEditData({...editData, type: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border-none">
+                                        <option value="Anual">Anual</option>
+                                        <option value="Especial">Especial</option>
+                                        <option value="Sin Goce">Sin Goce</option>
+                                        <option value="Adelantada">Adelantada</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-black uppercase ml-2 text-gray-400">Días</label>
+                                    <div className="w-full p-4 bg-gray-100 dark:bg-gray-900 rounded-2xl font-black text-center border-none">
+                                        {editData.days}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-black uppercase ml-2 text-gray-400">Motivo</label>
+                                <input type="text" value={editData.notes} onChange={e => setEditData({...editData, notes: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border-none" placeholder="Motivo o detalle" />
+                            </div>
+                            <button onClick={handleSaveEdit} disabled={isSaving} className="w-full py-5 bg-rr-orange text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-rr-orange-dark transition-all flex items-center justify-center gap-2">
+                                {isSaving ? <Loader2 className="animate-spin"/> : <Save size={18}/>} Guardar Cambios
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE ELIMINACIÓN */}
+            {deletingRecord && (
+                <div className="fixed inset-0 bg-black/90 z-[120] backdrop-blur-md flex items-center justify-center p-6 animate-scale-in">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl relative border-4 border-red-100 dark:border-red-900/30 text-center">
+                        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Trash2 size={32} className="text-red-600"/>
+                        </div>
+                        <h3 className="text-2xl font-black text-rr-dark dark:text-white uppercase mb-2">¿Eliminar Registro?</h3>
+                        <p className="text-xs font-medium text-gray-500 mb-8 leading-relaxed">
+                            Estás a punto de borrar una licencia del historial. Esta acción restaurará los días al saldo disponible del empleado.
+                        </p>
+                        <div className="flex gap-4">
+                            <button onClick={() => setDeletingRecord(null)} className="flex-1 py-4 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-2xl font-black uppercase text-xs hover:bg-gray-200 transition-colors">Cancelar</button>
+                            <button onClick={handleConfirmDelete} disabled={isSaving} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase text-xs hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                                {isSaving ? <Loader2 className="animate-spin"/> : 'Eliminar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 bg-white dark:bg-black/20 p-8 rounded-[2.5rem] border border-gray-100 dark:border-white/5 space-y-6">
@@ -121,18 +240,40 @@ const EmployeeDetail: React.FC<{
                         {history.length === 0 ? (
                             <p className="text-center text-gray-400 text-xs py-10 uppercase">No hay registros en este rango</p>
                         ) : (
-                            history.map(rec => (
-                                <div key={rec.id} className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl flex justify-between items-center">
-                                    <div>
-                                        <p className="font-bold text-xs uppercase">{formatLeaveLabel(rec.type, rec.notes)}</p>
-                                        <p className="text-[10px] text-gray-400">{formatDateDisplay(rec.startDate)} - {formatDateDisplay(rec.endDate)}</p>
+                            history.map(rec => {
+                                return (
+                                    <div key={rec.id} className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl flex justify-between items-center group border border-transparent hover:border-gray-200 dark:hover:border-white/10 transition-all">
+                                        <div>
+                                            <p className="font-bold text-xs uppercase">{formatLeaveLabel(rec.type, rec.notes)}</p>
+                                            <p className="text-[10px] text-gray-400">{formatDateDisplay(rec.startDate)} - {formatDateDisplay(rec.endDate)}</p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="text-right mr-2">
+                                                <span className="font-black text-lg">{rec.days}d</span>
+                                                <p className={`text-[9px] font-black uppercase ${rec.status === 'Aprobado' ? 'text-green-500' : 'text-yellow-500'}`}>{rec.status}</p>
+                                            </div>
+                                            
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setEditingRecord(rec); }} 
+                                                disabled={isSaving}
+                                                className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-all shadow-sm border border-gray-100 dark:border-white/5"
+                                                title="Editar"
+                                            >
+                                                <Edit size={16} />
+                                            </button>
+
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setDeletingRecord(rec); }} 
+                                                disabled={isSaving}
+                                                className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-all shadow-sm border border-gray-100 dark:border-white/5"
+                                                title="Eliminar"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="font-black text-lg">{rec.days}d</span>
-                                        <p className={`text-[9px] font-black uppercase ${rec.status === 'Aprobado' ? 'text-green-500' : 'text-yellow-500'}`}>{rec.status}</p>
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>
@@ -162,6 +303,7 @@ const EmployeeDetail: React.FC<{
 const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const { user } = useAuth();
     const { settings, updateSettings, addAgreedDay, updateAgreedDay, applyAgreedDaysToAll, employees, addEmployee, updateEmployee, toggleEmployeeStatus, isSaving, initializeYearlyAgreedDays, resetDatabase } = useData();
+    const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'personal' | 'days'>('days');
     const currentYear = new Date().getFullYear();
     
@@ -214,7 +356,10 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     };
 
     const handleBulkPDF = () => {
-        if (selectedIds.length === 0) return alert("Selecciona al menos un empleado.");
+        if (selectedIds.length === 0) {
+            showToast("Selecciona al menos un empleado.", 'warning');
+            return;
+        }
         const selectedEmps = employees.filter(e => selectedIds.includes(e.id));
         generateGeneralReport(selectedEmps, bulkDateRange, settings.agreedLeaveDays);
     };
@@ -223,7 +368,6 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         if (viewMode === 'create') {
             await addEmployee(data);
         } else {
-            // Pasamos el ID original (selectedEmpId) para que el update sepa a quién apuntar si el ID cambia
             await updateEmployee(data, selectedEmpId || undefined);
         }
         setViewMode('list');
@@ -234,7 +378,10 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const activeDays = settings.agreedLeaveDays.filter(d => d.active);
 
     const handleAddNewDay = () => {
-        if (!newDayDate || !newDayDesc.trim()) return alert("Completa fecha y motivo.");
+        if (!newDayDate || !newDayDesc.trim()) {
+            showToast("Completa fecha y motivo.", 'warning');
+            return;
+        }
         addAgreedDay(newDayDate, newDayDesc);
         setNewDayDate(''); setNewDayDesc('');
     };
@@ -268,7 +415,7 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             setSecurityStep('idle');
             setPendingAction(null);
         } else {
-            alert("❌ PIN Incorrecto");
+            showToast("PIN Incorrecto", 'error');
             setSecurityPin('');
         }
     };
