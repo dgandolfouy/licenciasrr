@@ -1,3 +1,4 @@
+
 import { Employee, LeaveRecord, AgreedDay, LeaveRequest } from '../types';
 
 const BASE_LEAVE_DAYS = 20;
@@ -106,8 +107,8 @@ export const calculateBaseGeneratedDays = (hireDateStr: string, targetYear: numb
     // Regla: (DíasTrabajados / 365) * 20
     const proportional = (daysWorked / 365) * BASE_LEAVE_DAYS;
 
-    // Redondeamos a 2 decimales para que sea legible (ej: 11.66)
-    return parseFloat(proportional.toFixed(2));
+    // CAMBIO SOLICITADO: Redondear hacia arriba (ej: 10.2 -> 11)
+    return Math.ceil(proportional);
 };
 
 export const getLeaveDaysSummary = (
