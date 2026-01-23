@@ -30,7 +30,7 @@ export interface LeaveRequest {
 
 export interface LeaveRecord {
   id: string;
-  type: 'Anual' | 'Especial' | 'Adelantada' | 'Acordado' | 'Sin Goce';
+  type: 'Anual' | 'Especial' | 'Adelantada' | 'Acordado' | 'Sin Goce' | 'Excepcion';
   specialType?: string;
   startDate: string;
   endDate: string;
@@ -39,6 +39,7 @@ export interface LeaveRecord {
   year: number;
   isFixed?: boolean; 
   justified?: boolean; // Nuevo: True si RRHH ya certificó el comprobante
+  agreedDayId?: string; // Referencia al ID del día acordado si es una excepción
 }
 
 export interface Employee {
