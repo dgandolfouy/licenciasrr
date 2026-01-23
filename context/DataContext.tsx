@@ -4,6 +4,7 @@ import { Employee, LeaveRecord, LeaveSettings, LeaveRequest, AgreedDay, NewsItem
 import { INITIAL_QUALITY_DOCS } from '../constants';
 import { calculateWorkingDays } from '../utils/leaveCalculator';
 import { supabase } from '../services/supabaseClient';
+import { useToast } from './ToastContext';
 
 interface DataContextType {
   employees: Employee[];
@@ -12,11 +13,13 @@ interface DataContextType {
   isSaving: boolean;
   getEmployeeById: (id: string) => Employee | undefined;
   addEmployee: (employee: Omit<Employee, 'leaveRecords' | 'requests'>) => Promise<void>;
-  updateEmployee: (employee: Employee, oldId?: string) => Promise<void>; // Actualizado
+  updateEmployee: (employee: Employee, oldId?: string) => Promise<void>; 
   toggleEmployeeStatus: (id: string, active: boolean) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>; 
   addLeaveRecord: (employeeId: string, record: Omit<LeaveRecord, 'id'>) => Promise<void>;
   addManualLeave: (employeeId: string, record: Omit<LeaveRecord, 'id'>) => Promise<void>;
+  deleteLeaveRecord: (employeeId: string, recordId: string) => Promise<void>;
+  updateLeaveRecord: (employeeId: string, recordId: string, data: Partial<LeaveRecord>) => Promise<void>;
   certifyLeaveRecord: (employeeId: string, recordId: string) => Promise<void>;
   resetDatabase: (mode: 'history_only' | 'full_reset') => Promise<void>; 
   updateSettings: (settings: Partial<LeaveSettings>) => Promise<void>;
@@ -39,6 +42,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [settings, setSettings] = useState<LeaveSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const { showToast } = useToast();
 
   const isSavingRef = useRef(false);
   useEffect(() => {
@@ -114,10 +118,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         const { error } = await supabase.from('employees').insert([employeeData]);
         if(error) throw error;
-        alert("✅ Empleado creado exitosamente.");
+        showToast("Empleado creado exitosamente.", 'success');
         await fetchData(true);
     } catch (e: any) {
-        alert("Error al crear empleado: " + e.message);
+        showToast("Error al crear empleado: " + e.message, 'error');
     } finally {
         setIsSaving(false);
     }
@@ -126,10 +130,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateEmployee: DataContextType['updateEmployee'] = async (updated, oldId) => {
     setIsSaving(true);
     try {
-      // Si se provee oldId, usamos ese para buscar el registro original. Si no, usamos el updated.id
       const targetId = oldId || updated.id;
 
-      // Si el ID cambió, verificar que el nuevo ID no exista ya
       if (oldId && oldId !== updated.id) {
           const { data } = await supabase.from('employees').select('id').eq('id', updated.id).maybeSingle();
           if (data) throw new Error(`El nuevo ID ${updated.id} ya existe en el sistema.`);
@@ -138,15 +140,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { error } = await supabase.from('employees').update(updated).eq('id', targetId);
       if (error) throw error;
       
-      // Actualizamos estado local
       setEmployees(prev => prev.map(e => e.id === targetId ? updated : e));
       
       if(oldId && oldId !== updated.id) {
-          alert(`✅ Cédula actualizada: ${oldId} -> ${updated.id}`);
+          showToast(`Cédula actualizada: ${oldId} -> ${updated.id}`, 'success');
+      } else {
+          showToast("Datos actualizados correctamente.", 'success');
       }
       
     } catch (e: any) {
-      alert("❌ ERROR AL ACTUALIZAR: " + e.message);
+      showToast("Error al actualizar: " + e.message, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -158,10 +161,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const { error } = await supabase.from('employees').update({ active }).eq('id', id);
           if (error) throw error;
           const status = active ? "Reactivado" : "Archivado";
-          alert(`✅ Legajo ${status}.`);
+          showToast(`Legajo ${status}.`, 'info');
           await fetchData(true);
       } catch (e: any) {
-          alert("Error cambiando estado: " + e.message);
+          showToast("Error cambiando estado: " + e.message, 'error');
       } finally {
           setIsSaving(false);
       }
@@ -173,7 +176,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const employee = employees.find(e => e.id === employeeId);
       if (!employee) throw new Error("Empleado no encontrado");
 
-      // Si es Especial, inicia como justified: false si no se especifica
       const justified = record.type === 'Especial' ? false : undefined;
 
       const newRecord = { ...record, id: `MAN_${Date.now()}`, justified };
@@ -190,13 +192,124 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const message = `Se ha cargado una licencia ${record.type} del ${formatDate(record.startDate)} al ${formatDate(record.endDate)}. Motivo: ${record.notes}`;
 
       await publishNews(message, 'RRHH', 'Sistema', employeeId);
-      alert("✅ ¡ÉXITO! Licencia cargada directamente en el legajo.");
+      showToast("Licencia cargada directamente en el legajo.", 'success');
       await fetchData(true);
     } catch (e: any) {
-      alert("❌ ERROR EN CARGA DIRECTA: " + e.message);
+      showToast("Error en carga directa: " + e.message, 'error');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const deleteLeaveRecord: DataContextType['deleteLeaveRecord'] = async (employeeId, recordId) => {
+      setIsSaving(true);
+      try {
+          const employee = employees.find(e => e.id === employeeId);
+          if (!employee) throw new Error("Empleado no encontrado");
+
+          const isPersonalRecord = (employee.leaveRecords || []).some(r => r.id === recordId);
+          let updatedRecords: LeaveRecord[] = [];
+
+          if (isPersonalRecord) {
+              updatedRecords = (employee.leaveRecords || []).filter(r => r.id !== recordId);
+          } else {
+              const agreedDay = settings.agreedLeaveDays.find(d => d.id === recordId);
+              if (agreedDay) {
+                  const exceptionRecord: LeaveRecord = {
+                      id: `EX_${Date.now()}`,
+                      type: 'Excepcion',
+                      startDate: agreedDay.date,
+                      endDate: agreedDay.date,
+                      days: 0,
+                      year: parseInt(agreedDay.date.split('-')[0]),
+                      agreedDayId: agreedDay.id,
+                      notes: 'Excepción a día acordado global'
+                  };
+                  updatedRecords = [...(employee.leaveRecords || []), exceptionRecord];
+              } else {
+                  throw new Error("Registro no encontrado para eliminar.");
+              }
+          }
+
+          const { error } = await supabase.from('employees').update({
+              leaveRecords: updatedRecords
+          }).eq('id', employeeId);
+
+          if (error) throw error;
+
+          showToast("Registro eliminado/anulado. El saldo se ha recalculado.", 'info');
+          await fetchData(true);
+      } catch (e: any) {
+          showToast("Error al eliminar registro: " + e.message, 'error');
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  const updateLeaveRecord: DataContextType['updateLeaveRecord'] = async (employeeId, recordId, updatedData) => {
+      setIsSaving(true);
+      try {
+          const employee = employees.find(e => e.id === employeeId);
+          if (!employee) throw new Error("Empleado no encontrado");
+
+          let updatedRecords = [...(employee.leaveRecords || [])];
+          const isPersonal = updatedRecords.some(r => r.id === recordId);
+
+          if (isPersonal) {
+              // Actualizar registro personal existente
+              updatedRecords = updatedRecords.map(r =>
+                  r.id === recordId ? { ...r, ...updatedData } : r
+              );
+          } else {
+              // Es un Día Acordado Global que se está modificando
+              const agreedDay = settings.agreedLeaveDays.find(d => d.id === recordId);
+              if (!agreedDay) throw new Error("Registro original no encontrado");
+
+              // 1. Crear excepción para el día global original
+              const exceptionRecord: LeaveRecord = {
+                  id: `EX_${Date.now()}`,
+                  type: 'Excepcion',
+                  startDate: agreedDay.date,
+                  endDate: agreedDay.date,
+                  days: 0,
+                  year: parseInt(agreedDay.date.split('-')[0]),
+                  agreedDayId: agreedDay.id,
+                  notes: 'Modificación de día acordado'
+              };
+
+              // 2. Crear el nuevo registro con los datos modificados
+              const newRecord: LeaveRecord = {
+                  id: `MOD_${Date.now()}`, 
+                  type: updatedData.type || 'Anual',
+                  startDate: updatedData.startDate || agreedDay.date,
+                  endDate: updatedData.endDate || agreedDay.date,
+                  days: updatedData.days || 1,
+                  notes: updatedData.notes || agreedDay.description,
+                  year: new Date((updatedData.startDate || agreedDay.date) + 'T00:00:00').getFullYear(),
+                  justified: true,
+                  isFixed: false
+              };
+
+              updatedRecords.push(exceptionRecord);
+              updatedRecords.push(newRecord);
+          }
+
+          const { error } = await supabase.from('employees').update({
+              leaveRecords: updatedRecords,
+              hasUnreadNews: true
+          }).eq('id', employeeId);
+
+          if (error) throw error;
+
+          await publishNews("Se ha realizado una corrección en tu historial de licencias.", "RRHH", "Sistema", employeeId);
+          showToast("Registro modificado correctamente.", 'success');
+          await fetchData(true);
+
+      } catch (e: any) {
+          showToast("Error al modificar: " + e.message, 'error');
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   const certifyLeaveRecord: DataContextType['certifyLeaveRecord'] = async (employeeId, recordId) => {
@@ -217,10 +330,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (error) throw error;
 
           await publishNews("Tu licencia especial ha sido CERTIFICADA y acreditada en tu saldo.", "RRHH", "Sistema", employeeId);
-          alert("✅ Licencia certificada con éxito. El saldo del empleado ha sido restablecido.");
+          showToast("Licencia certificada. Saldo restablecido.", 'success');
           await fetchData(true);
       } catch (e: any) {
-          alert("Error al certificar: " + e.message);
+          showToast("Error al certificar: " + e.message, 'error');
       } finally {
           setIsSaving(false);
       }
@@ -230,13 +343,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsSaving(true);
       try {
           if (mode === 'history_only') {
-              // Borra historial de licencias, solicitudes y noticias, pero mantiene empleados
               const { error: empError } = await supabase.from('employees').update({
                   leaveRecords: [],
                   requests: [],
                   hasUnreadNews: false,
                   readNewsIds: []
-              }).neq('id', 'placeholder'); // Truco para update all
+              }).neq('id', 'placeholder');
               if (empError) throw empError;
 
               const { error: settError } = await supabase.from('settings').update({
@@ -245,9 +357,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               }).eq('id', 1);
               if (settError) throw settError;
 
-              alert("✅ Historial limpiado. Los empleados se mantienen.");
+              showToast("Historial limpiado. Empleados mantenidos.", 'warning');
           } else if (mode === 'full_reset') {
-              // Borra TODO
               const { error: delError } = await supabase.from('employees').delete().neq('id', '0');
               if (delError) throw delError;
 
@@ -257,11 +368,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               }).eq('id', 1);
               if (settError) throw settError;
 
-              alert("⚠ SISTEMA REINICIADO DE FÁBRICA.");
+              showToast("Sistema reiniciado de fábrica.", 'warning');
           }
           await fetchData(true);
       } catch (e: any) {
-          alert("Error en reset: " + e.message);
+          showToast("Error en reset: " + e.message, 'error');
       } finally {
           setIsSaving(false);
       }
@@ -275,9 +386,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) throw error;
       
       await publishNews(`Agenda de planta confirmada y sincronizada.`, 'RRHH', 'Sistema');
+      showToast("Agenda sincronizada.", 'success');
       await fetchData(true);
     } catch (e: any) {
-      throw e;
+      showToast("Error sync: " + e.message, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -311,7 +423,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const uniqueDefaults = newDefaults.filter(d => !existingDates.has(d.date));
 
           if (uniqueDefaults.length === 0) {
-              alert("⚠️ No hay días nuevos para agregar. Ya existen registros para estas fechas.");
+              showToast("No hay días nuevos para agregar. Ya existen.", 'info');
               return;
           }
 
@@ -320,11 +432,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const { error } = await supabase.from('settings').update({ agreedLeaveDays: updated }).eq('id', 1);
           if(error) throw error;
           
-          alert(`✅ Se han generado ${uniqueDefaults.length} nuevos días estándar para ${year}.`);
+          showToast(`Generados ${uniqueDefaults.length} nuevos días para ${year}.`, 'success');
           await fetchData(true);
 
       } catch (e: any) {
-          alert("Error: " + e.message);
+          showToast("Error: " + e.message, 'error');
       } finally {
           setIsSaving(false);
       }
@@ -387,7 +499,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           days: req.days, 
           notes: req.reason, 
           year: new Date(req.startDate + 'T00:00:00').getFullYear(),
-          justified: req.type === 'Especial' ? false : undefined // Especial nace NO justificada
+          justified: req.type === 'Especial' ? false : undefined 
         });
       }
 
@@ -404,10 +516,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         'RRHH', 'Sistema', employeeId
       );
       
-      alert(`✅ ¡SOLICITUD ${status.toUpperCase()} CON ÉXITO!`);
+      showToast(`Solicitud ${status} con éxito.`, status === 'Aprobado' ? 'success' : 'warning');
       await fetchData(true); 
     } catch (e: any) {
-      alert("❌ ERROR AL PROCESAR: " + e.message);
+      showToast("Error al procesar: " + e.message, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -430,10 +542,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await supabase.rpc('mark_all_unread'); 
       }
 
-      if (isManual) alert("✅ ¡NOTICIA PUBLICADA! Los empleados recibirán el aviso.");
+      if (isManual) showToast("Noticia publicada.", 'success');
       await fetchData(true);
     } catch (e: any) {
-      if (isManual) alert("❌ ERROR AL PUBLICAR: " + e.message);
+      if (isManual) showToast("Error al publicar: " + e.message, 'error');
     } finally {
       if (isManual) setIsSaving(false);
     }
@@ -446,7 +558,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) throw error;
       await fetchData(true);
     } catch (e: any) {
-      alert("❌ ERROR AL GUARDAR AJUSTES: " + e.message);
+      showToast("Error guardando ajustes: " + e.message, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -454,7 +566,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addAgreedDay = async (date: string, desc: string) => {
     if (settings.agreedLeaveDays.some(d => d.date === date)) {
-        alert("⚠️ Ya existe un día acordado para esta fecha. No se permiten duplicados.");
+        showToast("Ya existe un día acordado para esta fecha.", 'warning');
         return;
     }
     const newDay = { id: `AG_${Date.now()}`, date, description: desc, active: false };
@@ -464,7 +576,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const updateAgreedDay = async (id: string, date: string, desc: string) => {
     if (settings.agreedLeaveDays.some(d => d.date === date && d.id !== id)) {
-        alert("⚠️ Ya existe otro día acordado para esa fecha.");
+        showToast("Ya existe un día acordado para esta fecha.", 'warning');
         return;
     }
     const updated = settings.agreedLeaveDays.map(d => d.id === id ? { ...d, date, description: desc } : d);
@@ -509,10 +621,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const { error } = await supabase.from('employees').delete().eq('id', id);
       if (error) throw error;
-      alert("✅ Legajo eliminado definitivamente.");
+      showToast("Legajo eliminado definitivamente.", 'warning');
       await fetchData(true);
     } catch (e: any) {
-      alert("Error: " + e.message);
+      showToast("Error: " + e.message, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -528,7 +640,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addManualLeave, updateSettings, addAgreedDay, updateAgreedDay, 
       applyAgreedDaysToAll, initializeYearlyAgreedDays, processRequest, 
       createRequest, markRequestAsNotified, publishNews, markNewsAsRead, clearUnreadNews,
-      certifyLeaveRecord, resetDatabase
+      certifyLeaveRecord, resetDatabase, deleteLeaveRecord, updateLeaveRecord
     }}>
       {children}
     </DataContext.Provider>
