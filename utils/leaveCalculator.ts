@@ -127,27 +127,34 @@ export const getLeaveDaysSummary = (
       const totalGenerated = baseDays + seniorityDays;
       const availablePool = totalGenerated;
 
-      // 2. Identificar Días Acordados Activos para el año
-      const yearGlobalAgreed = (globalAgreedDays || []).filter(d => d.active && d.date.startsWith(targetYear.toString()));
+      // 2. Identificar Excepciones (Días acordados que este empleado NO toma)
+      const exceptions = new Set(
+          (employee.leaveRecords || [])
+            .filter(r => r.type === 'Excepcion')
+            .map(r => r.agreedDayId || r.startDate) // Usamos ID si existe, sino fecha por compatibilidad
+      );
+
+      // 3. Identificar Días Acordados Activos para el año, excluyendo excepciones
+      const yearGlobalAgreed = (globalAgreedDays || []).filter(d => 
+          d.active && 
+          d.date.startsWith(targetYear.toString()) && 
+          !exceptions.has(d.id) && 
+          !exceptions.has(d.date)
+      );
       
       // Creamos un Set de fechas acordadas para búsqueda rápida O(1)
       const agreedDatesSet = new Set(yearGlobalAgreed.map(d => d.date));
       const fixedCount = agreedDatesSet.size;
 
-      // 3. Calcular días tomados
+      // 4. Calcular días tomados (manuales)
       let takenCount = 0;
       
       (employee.leaveRecords || []).forEach(r => {
           const recYear = r.year || parseInt(r.startDate.split('-')[0]);
           
-          // LÓGICA DE NEGOCIO:
-          // - Acordados: Se ignoran aquí (ya sumados en fixedCount).
-          // - Especial Justificado: Se ignoran (son gratis, no descuentan).
-          // - Especial NO Justificado: Se suman (cuentan como Anual hasta que traiga el papel).
-          // - Anual / Adelantada: Se suman.
-          
+          // Ignoramos tipos especiales que no descuentan
           const isSpecialAndJustified = r.type === 'Especial' && r.justified === true;
-          const shouldCount = r.type !== 'Acordado' && !isSpecialAndJustified;
+          const shouldCount = r.type !== 'Acordado' && r.type !== 'Excepcion' && !isSpecialAndJustified;
 
           if (recYear === targetYear && shouldCount) {
               const daysInRange = getDatesInRange(r.startDate, r.endDate);
@@ -156,7 +163,7 @@ export const getLeaveDaysSummary = (
                   const d = new Date(dateStr + 'T12:00:00');
                   const dayOfWeek = d.getDay();
                   
-                  // Si es día laboral y NO es un día acordado, cuenta como tomado personal
+                  // Si es día laboral y NO es un día acordado (ya contado en fixedCount), lo sumamos
                   if (dayOfWeek !== 0 && dayOfWeek !== 6) {
                       if (!agreedDatesSet.has(dateStr)) {
                           takenCount++;
@@ -191,14 +198,24 @@ export interface UnifiedHistoryItem {
     status: 'Aprobado' | 'Pendiente' | 'Rechazado';
     adminComment?: string;
     year: number;
-    justified?: boolean; // Nuevo campo en la interfaz
+    justified?: boolean; 
 }
 
 export const getUnifiedHistory = (employee: Employee, settingsAgreedDays: AgreedDay[]): UnifiedHistoryItem[] => {
     const history: UnifiedHistoryItem[] = [];
 
-    // Filtramos solo los días acordados activos
-    const activeAgreedDays = settingsAgreedDays.filter(d => d.active);
+    // Filtramos excepciones
+    const exceptions = new Set(
+        (employee.leaveRecords || [])
+          .filter(r => r.type === 'Excepcion')
+          .map(r => r.agreedDayId || r.startDate)
+    );
+
+    // Filtramos solo los días acordados activos y NO exceptuados
+    const activeAgreedDays = settingsAgreedDays.filter(d => 
+        d.active && !exceptions.has(d.id) && !exceptions.has(d.date)
+    );
+    
     const agreedDatesSet = new Set(activeAgreedDays.map(d => d.date));
 
     // 1. Añadir Días Acordados al historial
@@ -217,6 +234,8 @@ export const getUnifiedHistory = (employee: Employee, settingsAgreedDays: Agreed
 
     // 2. Procesar Registros Personales
     (employee.leaveRecords || []).forEach(r => {
+        if (r.type === 'Excepcion') return; // No mostrar las excepciones en la lista visual
+
         let effectiveDays = 0;
         const daysInRange = getDatesInRange(r.startDate, r.endDate);
         daysInRange.forEach(dateStr => {
@@ -239,7 +258,7 @@ export const getUnifiedHistory = (employee: Employee, settingsAgreedDays: Agreed
                     notes: r.notes || '',
                     status: 'Aprobado',
                     year: r.year || parseInt(r.startDate.split('-')[0]),
-                    justified: r.justified // Pasamos el estado
+                    justified: r.justified
                 });
              }
         }
