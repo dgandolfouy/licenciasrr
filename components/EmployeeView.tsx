@@ -3,8 +3,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { getLeaveDaysSummary, formatDateDisplay, calculateWorkingDays, getUnifiedHistory, formatLeaveLabel } from '../utils/leaveCalculator';
-import { FileDown, Plus, X, Mail, Calendar, Loader2, ChevronDown, ChevronRight, AlertCircle, AlertTriangle } from './icons/LucideIcons';
+import { FileDown, Plus, X, Mail, Calendar, Loader2, ChevronDown, ChevronRight, AlertCircle, AlertTriangle, Info } from './icons/LucideIcons';
 import { generateEmployeeReport } from '../services/pdfService';
+import { useToast } from '../context/ToastContext';
 
 const DonutChart: React.FC<{ value: number; total: number }> = ({ value, total }) => {
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
@@ -32,6 +33,7 @@ const DonutChart: React.FC<{ value: number; total: number }> = ({ value, total }
 const EmployeeView: React.FC = () => {
     const { user } = useAuth();
     const { getEmployeeById, settings, createRequest, markNewsAsRead, isSaving } = useData();
+    const { showToast } = useToast();
     const employee = getEmployeeById(user?.id || '');
     
     const [isRequesting, setIsRequesting] = useState(false);
@@ -124,10 +126,10 @@ const EmployeeView: React.FC = () => {
                 setIsRequesting(false);
                 setRange({start: '', end: ''});
                 setRequestReason('Licencia');
-                alert("✅ Solicitud enviada a RRHH");
+                showToast("Solicitud enviada a RRHH", 'success');
             }
         } catch (e: any) {
-            alert("Error inesperado: " + e.message);
+            showToast("Error inesperado: " + e.message, 'error');
         }
     };
 
@@ -139,14 +141,29 @@ const EmployeeView: React.FC = () => {
     return (
         <div className="max-w-4xl mx-auto space-y-10 animate-fade-in relative pb-32">
             {activeNews && (
-                <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[200] flex items-center justify-center p-6 animate-fade-in">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[3rem] p-10 shadow-2xl relative border-4 border-rr-orange/20 text-center space-y-8 animate-scale-in">
-                        <Mail className="text-rr-orange mx-auto" size={40} />
-                        <div className="space-y-4">
-                            <h2 className="text-3xl font-black uppercase text-rr-dark dark:text-white">Comunicado</h2>
-                            <div className="p-8 bg-gray-50 dark:bg-gray-900 rounded-[2rem]"><p className="text-lg font-bold text-gray-700 dark:text-gray-200 italic">"{activeNews.content}"</p></div>
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] flex items-center justify-center p-6 animate-fade-in">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[3rem] p-10 shadow-2xl relative border-4 border-rr-orange animate-scale-in">
+                        <div className="flex justify-center mb-6">
+                             <div className="bg-rr-orange/10 p-5 rounded-full text-rr-orange animate-pulse">
+                                <Mail size={40} />
+                             </div>
                         </div>
-                        <button onClick={handleReadCurrentNews} className="w-full py-6 bg-rr-dark text-white rounded-2xl font-black uppercase tracking-widest hover:bg-rr-orange transition-all active:scale-95">Leído</button>
+                        <div className="space-y-4 text-center">
+                            <h2 className="text-3xl font-black uppercase text-rr-dark dark:text-white tracking-tight">Nuevo Mensaje</h2>
+                            <p className="text-xs font-bold text-rr-orange uppercase tracking-widest bg-rr-orange/5 inline-block px-3 py-1 rounded-lg">De: {activeNews.author}</p>
+                            
+                            <div className="p-8 bg-gray-50 dark:bg-black/20 rounded-[2rem] border border-gray-100 dark:border-white/5 mt-4">
+                                <p className="text-lg font-medium text-gray-700 dark:text-gray-200 italic leading-relaxed">
+                                    "{activeNews.content}"
+                                </p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={handleReadCurrentNews} 
+                            className="w-full mt-8 py-6 bg-rr-dark text-white rounded-2xl font-black uppercase tracking-widest hover:bg-rr-orange transition-all active:scale-95 shadow-xl"
+                        >
+                            Marcar como Leído
+                        </button>
                     </div>
                 </div>
             )}
