@@ -30,9 +30,15 @@ const Dashboard: React.FC = () => {
 
     useEffect(() => {
         if (user) {
+            // Si es OPERARIO, forzamos modo colaborador, pero mantenemos la pantalla de selección si así se desea
+            // O podemos dejar que el renderRoleSelection maneje la UI. 
+            // En este caso, para cumplir con el centrado visual, dejamos que el usuario seleccione,
+            // pero si quieres que entren directo, descomenta lo siguiente:
+            /*
             if (user.role === UserRole.OPERARIO) {
                 setSelectedMode('COLABORADOR');
             }
+            */
         }
     }, [user]);
 
@@ -46,10 +52,14 @@ const Dashboard: React.FC = () => {
 
     const employee = getEmployeeById(user.id);
     const hasUnread = employee?.hasUnreadNews;
+    const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.RRHH;
 
     const capitalize = (str: string) => {
         if (!str) return 'Usuario';
-        return str.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+        // 1. Eliminamos tildes (NFD separa 'ó' en 'o' + '´', el replace borra el '´')
+        const cleanStr = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        // 2. Capitalizamos cada palabra correctamente
+        return cleanStr.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
     };
 
     const renderDocReader = () => {
@@ -113,13 +123,15 @@ const Dashboard: React.FC = () => {
                 </h2>
                 <p className="text-gray-400 font-bold uppercase tracking-[0.4em] text-[10px] opacity-70">Selecciona el área de trabajo</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-2xl px-4">
-                <button onClick={() => setSelectedMode('COLABORADOR')} className="group bg-white dark:bg-gray-800 p-12 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-700 hover:border-rr-orange transition-all flex flex-col items-center gap-6">
+            
+            {/* Lógica de Grid: Si es Admin (Cristina/Daniel) mantiene 2 columnas. Si es usuario normal, 1 columna centrada y más angosta */}
+            <div className={`grid gap-8 w-full px-4 transition-all ${isAdmin ? 'grid-cols-1 md:grid-cols-2 max-w-2xl' : 'grid-cols-1 max-w-sm'}`}>
+                <button onClick={() => setSelectedMode('COLABORADOR')} className="group bg-white dark:bg-gray-800 p-12 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-700 hover:border-rr-orange transition-all flex flex-col items-center gap-6 w-full">
                     <User size={56} className="text-gray-200 group-hover:text-rr-orange transition-colors" />
                     <h3 className="text-lg font-black uppercase text-rr-dark dark:text-white tracking-widest">Portal Personal</h3>
                 </button>
-                {(user.role === UserRole.ADMIN || user.role === UserRole.RRHH) && (
-                    <button onClick={() => setSelectedMode('ADMINISTRADOR')} className="group bg-rr-dark p-12 rounded-[3rem] shadow-xl border border-transparent hover:border-rr-orange transition-all flex flex-col items-center gap-6 text-white">
+                {isAdmin && (
+                    <button onClick={() => setSelectedMode('ADMINISTRADOR')} className="group bg-rr-dark p-12 rounded-[3rem] shadow-xl border border-transparent hover:border-rr-orange transition-all flex flex-col items-center gap-6 text-white w-full">
                         <ShieldCheck size={56} className="text-gray-600 group-hover:text-rr-orange transition-colors" />
                         <h3 className="text-lg font-black uppercase tracking-widest">Administración</h3>
                     </button>
@@ -142,7 +154,7 @@ const Dashboard: React.FC = () => {
         <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-[#111] transition-colors duration-300">
             <header className="bg-white/90 dark:bg-[#111]/90 backdrop-blur-lg shadow-sm sticky top-0 z-[60] border-b dark:border-gray-800">
                 <div className="container mx-auto px-6 h-20 flex items-center justify-between">
-                    <div className="flex items-center gap-4 cursor-pointer" onClick={() => { setView('home'); if(user.role !== UserRole.OPERARIO) setSelectedMode(null); }}>
+                    <div className="flex items-center gap-4 cursor-pointer" onClick={() => { setView('home'); setSelectedMode(null); }}>
                         <Logo className="h-10 w-auto" />
                     </div>
                     <div className="flex items-center gap-3">
