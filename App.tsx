@@ -6,6 +6,7 @@ import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 import { DataProvider } from './context/DataContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
 
 const AppRoutes: React.FC = () => {
     const { user } = useAuth();
@@ -20,15 +21,17 @@ const AppRoutes: React.FC = () => {
 function App() {
     return (
         <ThemeProvider>
-            <AuthProvider>
-                <DataProvider>
-                    <HashRouter>
-                        <div className="min-h-screen bg-gray-100 text-rr-dark dark:bg-rr-dark dark:text-gray-200">
-                            <AppRoutes />
-                        </div>
-                    </HashRouter>
-                </DataProvider>
-            </AuthProvider>
+            <ToastProvider>
+                <AuthProvider>
+                    <DataProvider>
+                        <HashRouter>
+                            <div className="min-h-screen bg-gray-100 text-rr-dark dark:bg-rr-dark dark:text-gray-200">
+                                <AppRoutes />
+                            </div>
+                        </HashRouter>
+                    </DataProvider>
+                </AuthProvider>
+            </ToastProvider>
         </ThemeProvider>
     );
 }
