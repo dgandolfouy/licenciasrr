@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { getLeaveDaysSummary, formatDateDisplay, calculateWorkingDays, getUnifiedHistory, formatLeaveLabel } from '../utils/leaveCalculator';
-import { FileDown, Plus, X, Mail, Calendar, Loader2, ChevronDown, ChevronRight, AlertCircle, AlertTriangle, Info } from './icons/LucideIcons';
+import { FileDown, Plus, X, Mail, Calendar, Loader2, ChevronDown, ChevronRight, AlertCircle, AlertTriangle, Info, Send } from './icons/LucideIcons';
 import { generateEmployeeReport } from '../services/pdfService';
 import { useToast } from '../context/ToastContext';
 
@@ -32,7 +32,7 @@ const DonutChart: React.FC<{ value: number; total: number }> = ({ value, total }
 
 const EmployeeView: React.FC = () => {
     const { user } = useAuth();
-    const { getEmployeeById, settings, createRequest, markNewsAsRead, isSaving } = useData();
+    const { getEmployeeById, settings, createRequest, markNewsAsRead, isSaving, employees } = useData(); // Agregamos 'employees' para calcular saturación
     const { showToast } = useToast();
     const employee = getEmployeeById(user?.id || '');
     
@@ -44,6 +44,9 @@ const EmployeeView: React.FC = () => {
     const [requestType, setRequestType] = useState<'Anual' | 'Especial' | 'Sin Goce'>('Anual');
     
     const [formError, setFormError] = useState<string | null>(null);
+
+    // --- CONFIGURACIÓN WHATSAPP GERENCIA ---
+    const MANAGER_PHONE = '59894488412'; // REEMPLAZAR CON EL NUMERO REAL (formato internacional sin +)
 
     const daysRequested = useMemo(() => {
         if (!range.start || !range.end) return 0;
@@ -81,6 +84,43 @@ const EmployeeView: React.FC = () => {
 
     const toggleYear = (year: number) => {
         setOpenYears(prev => prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year]);
+    };
+
+    const calculatePlantSaturation = (startDate: string, endDate: string) => {
+        let maxAbsence = 0;
+        let totalAbsenceDays = 0;
+        
+        const start = new Date(startDate + 'T12:00:00');
+        const end = new Date(endDate + 'T12:00:00');
+        const current = new Date(start);
+
+        while (current <= end) {
+            const isoDate = current.toISOString().split('T')[0];
+            const isWeekend = current.getDay() === 0 || current.getDay() === 6;
+            
+            if (!isWeekend) {
+                let dailyCount = 0;
+                // Verificar días acordados globales
+                const isGlobal = settings.agreedLeaveDays.some(d => d.active && d.date === isoDate);
+                
+                if (isGlobal) {
+                    dailyCount = employees.filter(e => e.type === 'Jornalero').length; // Asumimos toda la planta jornalera
+                } else {
+                    // Contar licencias individuales de Jornaleros
+                    employees.filter(e => e.type === 'Jornalero').forEach(emp => {
+                        (emp.leaveRecords || []).forEach(rec => {
+                            if (isoDate >= rec.startDate && isoDate <= rec.endDate) dailyCount++;
+                        });
+                    });
+                }
+                
+                if (dailyCount > maxAbsence) maxAbsence = dailyCount;
+                totalAbsenceDays += dailyCount;
+            }
+            current.setDate(current.getDate() + 1);
+        }
+
+        return { maxAbsence, riskLevel: maxAbsence >= 5 ? 'CRÍTICO 🔴' : maxAbsence >= 3 ? 'ALTO 🟠' : 'BAJO 🟢' };
     };
 
     const submitRequest = async () => {
@@ -123,10 +163,35 @@ const EmployeeView: React.FC = () => {
             if (error) {
                 setFormError(`⚠️ ${error}`);
             } else {
+                // --- LÓGICA DE NOTIFICACIÓN WHATSAPP JORNALERO ---
+                if (employee.type === 'Jornalero') {
+                    const saturation = calculatePlantSaturation(range.start, range.end);
+                    const formatDate = (d: string) => d.split('-').reverse().join('/');
+                    
+                    const message = `*SOLICITUD DE LICENCIA - PLANTA* 🏭\n\n` +
+                        `👤 *Colaborador:* ${employee.lastName}, ${employee.name}\n` +
+                        `📅 *Fechas:* ${formatDate(range.start)} al ${formatDate(range.end)}\n` +
+                        `⏳ *Días:* ${calcDays}\n` +
+                        `📝 *Motivo:* ${requestReason}\n\n` +
+                        `📊 *ANÁLISIS DE PLANTA EN ESTAS FECHAS:*\n` +
+                        `Nivel de Ausentismo Previsto: *${saturation.riskLevel}*\n` +
+                        `(Se detectaron hasta ${saturation.maxAbsence} jornaleros ausentes simultáneamente en este rango)\n\n` +
+                        `-----------------------------------\n` +
+                        `✅ *SI AUTORIZA:* Por favor reenvíe este mensaje al contacto de RRHH para su procesamiento.\n` +
+                        `❌ *SI NO AUTORIZA:* Responda indicando el motivo para informarlo en el sistema.`;
+
+                    const whatsappUrl = `https://wa.me/${MANAGER_PHONE}?text=${encodeURIComponent(message)}`;
+                    
+                    // Abrir WhatsApp en nueva pestaña
+                    window.open(whatsappUrl, '_blank');
+                    showToast("Solicitud creada. Se ha abierto WhatsApp para notificar a Gerencia.", 'success');
+                } else {
+                    showToast("Solicitud enviada a RRHH", 'success');
+                }
+
                 setIsRequesting(false);
                 setRange({start: '', end: ''});
                 setRequestReason('Licencia');
-                showToast("Solicitud enviada a RRHH", 'success');
             }
         } catch (e: any) {
             showToast("Error inesperado: " + e.message, 'error');
@@ -318,7 +383,7 @@ const EmployeeView: React.FC = () => {
                                 disabled={isSaving} 
                                 className="w-full py-6 bg-rr-orange text-white rounded-2xl font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"
                             >
-                                {isSaving ? <Loader2 className="animate-spin"/> : "Enviar a RRHH"}
+                                {isSaving ? <Loader2 className="animate-spin"/> : employee.type === 'Jornalero' ? "Solicitar y Notificar a Gerencia" : "Enviar a RRHH"}
                             </button>
                         </div>
                     </div>
