@@ -1,5 +1,5 @@
 {
-  "name": "control-de-licencias-rrhh-050226-(beta-en-prueba-real)",
+  "name": "control-de-licencias-rrhh-050226-(beta-en-prueba-fin)",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,13 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "jspdf": "^4.0.0",
-    "jspdf-autotable": "^5.0.7",
-    "react-router-dom": "^7.12.0",
-    "lucide-react": "^0.562.0",
-    "@supabase/supabase-js": "^2.90.1"
+    "react": "18.3.1",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "6.22.3",
+    "lucide-react": "0.344.0",
+    "@supabase/supabase-js": "2.39.7",
+    "jspdf": "2.5.1",
+    "jspdf-autotable": "3.8.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
