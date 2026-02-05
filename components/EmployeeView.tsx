@@ -46,7 +46,7 @@ const EmployeeView: React.FC = () => {
     const [formError, setFormError] = useState<string | null>(null);
 
     // --- CONFIGURACIÓN WHATSAPP GERENCIA ---
-    const MANAGER_PHONE = '59899000000'; // REEMPLAZAR CON EL NUMERO REAL (formato internacional sin +)
+    const MANAGER_PHONE = '59895751833'; // REEMPLAZAR CON EL NUMERO REAL (formato internacional sin +)
 
     const daysRequested = useMemo(() => {
         if (!range.start || !range.end) return 0;
