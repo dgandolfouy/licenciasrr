@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Trash2, X, Check, Search, Edit, Save, CalendarPlus, AlertTriangle, ShieldCheck, Loader2, UserPlus, FileDown, Archive, History, ArrowLeft, Filter, Sparkles, CheckCircle2, Lock, ShieldAlert, KeyRound, PlusCircle, User as UserIcon, AlertCircle as AlertCircleIcon } from './icons/LucideIcons';
+import { Trash2, X, Check, Search, Edit, Save, CalendarPlus, AlertTriangle, ShieldCheck, Loader2, UserPlus, FileDown, Archive, History, ArrowLeft, Filter, Sparkles, CheckCircle2, Lock, ShieldAlert, KeyRound, PlusCircle } from './icons/LucideIcons';
 import { Employee, LeaveRecord, UserRole, User } from '../types';
 import { formatDateDisplay, getUnifiedHistory, formatLeaveLabel, calculateWorkingDays, getLeaveDaysSummary } from '../utils/leaveCalculator';
 import { generateEmployeeReport, generateGeneralReport } from '../services/pdfService';
@@ -132,7 +132,6 @@ const EmployeeDetail: React.FC<{
     user: User | null
 }> = ({ employee, summary, onBack, onEdit, onToggleActive, settings, user }) => {
     const { deleteLeaveRecord, updateLeaveRecord, addManualLeave, isSaving } = useData();
-    const { showToast } = useToast();
     const currentYear = new Date().getFullYear();
     const [dateRange, setDateRange] = useState({
         start: `${currentYear}-01-01`,
@@ -142,12 +141,23 @@ const EmployeeDetail: React.FC<{
     // Estado para los modales
     const [editingRecord, setEditingRecord] = useState<any | null>(null);
     const [deletingRecord, setDeletingRecord] = useState<any | null>(null);
-    const [isAddingLeave, setIsAddingLeave] = useState(false);
+    const [showManualModal, setShowManualModal] = useState(false);
     
-    // Datos para los formularios de modales
-    const [editData, setEditData] = useState({ start: '', end: '', type: 'Anual', notes: '', days: 0 });
-    const [manualData, setManualData] = useState({ start: '', end: '', type: 'Anual' as any, notes: '', days: 0 });
-    const [manualError, setManualError] = useState<string | null>(null);
+    const [editData, setEditData] = useState({
+        start: '',
+        end: '',
+        type: 'Anual',
+        notes: '',
+        days: 0
+    });
+
+    // Estado para formulario manual
+    const [manualForm, setManualForm] = useState({
+        start: '',
+        end: '',
+        type: 'Anual',
+        notes: ''
+    });
 
     const history = useMemo(() => {
         let list = getUnifiedHistory(employee, settings.agreedLeaveDays);
@@ -168,19 +178,13 @@ const EmployeeDetail: React.FC<{
             });
         }
     }, [editingRecord]);
-    
-    useEffect(() => {
-        if (manualData.start && manualData.end) {
-            setManualData(prev => ({ ...prev, days: calculateWorkingDays(manualData.start, manualData.end, []) }));
-        }
-    }, [manualData.start, manualData.end]);
 
     useEffect(() => {
         if (editData.start && editData.end) {
-            setEditData(prev => ({ ...prev, days: calculateWorkingDays(editData.start, editData.end, []) }));
+            const d = calculateWorkingDays(editData.start, editData.end, []);
+            setEditData(prev => ({ ...prev, days: d }));
         }
     }, [editData.start, editData.end]);
-
 
     const handleConfirmDelete = async () => {
         if (deletingRecord) {
@@ -202,32 +206,22 @@ const EmployeeDetail: React.FC<{
     };
 
     const handleManualSubmit = async () => {
-        setManualError(null);
-        if (!manualData.start || !manualData.end || !manualData.notes.trim()) {
-            setManualError("⚠️ Completa todos los campos: Fechas y Motivo."); return;
-        }
-        if (manualData.end < manualData.start) {
-            setManualError("⚠️ La fecha de fin es anterior al inicio."); return;
-        }
-        if (manualData.days <= 0) {
-            setManualError("⚠️ El rango seleccionado no contiene días laborables."); return;
-        }
-
-        if (manualData.type === 'Anual' && manualData.days > summary.remainingDays) {
-            if (!confirm(`⚠️ ALERTA: El saldo es ${summary.remainingDays} y estás cargando ${manualData.days} días. El saldo quedará negativo. ¿Continuar?`)) return;
-        }
+        if (!manualForm.start || !manualForm.end) return;
         
+        const days = calculateWorkingDays(manualForm.start, manualForm.end, []);
+        const year = new Date(manualForm.start + 'T00:00:00').getFullYear();
+
         await addManualLeave(employee.id, {
-            startDate: manualData.start,
-            endDate: manualData.end,
-            days: manualData.days,
-            type: manualData.type,
-            notes: manualData.notes,
-            year: new Date(manualData.start + 'T00:00:00').getFullYear()
+            startDate: manualForm.start,
+            endDate: manualForm.end,
+            type: manualForm.type as any,
+            notes: manualForm.notes,
+            days,
+            year
         });
         
-        setIsAddingLeave(false);
-        setManualData({ start: '', end: '', type: 'Anual', notes: '', days: 0 });
+        setShowManualModal(false);
+        setManualForm({ start: '', end: '', type: 'Anual', notes: '' });
     };
 
     return (
@@ -242,51 +236,6 @@ const EmployeeDetail: React.FC<{
                     {summary.remainingDays} Días Disponibles
                 </span>
             </div>
-
-            {/* MODAL DE CARGA MANUAL */}
-            {isAddingLeave && (
-                <div className="fixed inset-0 bg-black/90 z-[120] backdrop-blur-md flex items-center justify-center p-6 animate-scale-in">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl relative border-4 border-gray-100 dark:border-gray-700">
-                        <button onClick={() => setIsAddingLeave(false)} className="absolute top-6 right-6 text-gray-400 hover:text-red-500"><X size={24}/></button>
-                        <h3 className="text-2xl font-black text-rr-dark dark:text-white uppercase mb-8">Cargar Licencia Directa</h3>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-black uppercase ml-2 text-gray-400">Inicio</label>
-                                    <input type="date" value={manualData.start} onChange={e => setManualData({...manualData, start: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border-none" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-black uppercase ml-2 text-gray-400">Fin</label>
-                                    <input type="date" value={manualData.end} onChange={e => setManualData({...manualData, end: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border-none" />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="col-span-2 space-y-1">
-                                    <label className="text-[9px] font-black uppercase ml-2 text-gray-400">Tipo</label>
-                                    <select value={manualData.type} onChange={e => setManualData({...manualData, type: e.target.value as any})} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border-none">
-                                        <option value="Anual">Anual</option>
-                                        <option value="Especial">Especial</option>
-                                        <option value="Sin Goce">Sin Goce</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-black uppercase ml-2 text-gray-400">Días</label>
-                                    <div className="w-full p-4 bg-gray-100 dark:bg-gray-900 rounded-2xl font-black text-center border-none">{manualData.days}</div>
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[9px] font-black uppercase ml-2 text-gray-400">Motivo</label>
-                                <input type="text" value={manualData.notes} onChange={e => setManualData({...manualData, notes: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl font-bold border-none" placeholder="Motivo o detalle" />
-                            </div>
-                            {manualError && <p className="text-xs text-red-500 font-bold text-center">{manualError}</p>}
-                            <button onClick={handleManualSubmit} disabled={isSaving} className="w-full py-5 bg-rr-orange text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-rr-orange-dark transition-all flex items-center justify-center gap-2">
-                                {isSaving ? <Loader2 className="animate-spin"/> : <Save size={18}/>} Confirmar Carga
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
 
             {/* MODAL DE EDICIÓN */}
             {editingRecord && (
@@ -355,6 +304,56 @@ const EmployeeDetail: React.FC<{
                 </div>
             )}
 
+            {/* MODAL AGREGAR LICENCIA MANUAL */}
+            {showManualModal && (
+                <div className="fixed inset-0 bg-black/90 z-[120] backdrop-blur-md flex items-center justify-center p-6 animate-scale-in">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl relative border-4 border-gray-100 dark:border-gray-700">
+                        <button onClick={() => setShowManualModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-red-500"><X size={24}/></button>
+                        
+                        <h3 className="text-2xl font-black text-rr-dark dark:text-white uppercase mb-8 flex items-center gap-3">
+                            <PlusCircle size={28} className="text-rr-orange"/>
+                            Agregar Licencia
+                        </h3>
+
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Desde</label>
+                                    <input type="date" value={manualForm.start} onChange={e => setManualForm({...manualForm, start: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl font-bold border-none text-rr-dark dark:text-white" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Hasta</label>
+                                    <input type="date" value={manualForm.end} onChange={e => setManualForm({...manualForm, end: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl font-bold border-none text-rr-dark dark:text-white" />
+                                </div>
+                            </div>
+
+                             <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Tipo de Licencia</label>
+                                <select value={manualForm.type} onChange={e => setManualForm({...manualForm, type: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl font-bold border-none text-rr-dark dark:text-white outline-none">
+                                    <option value="Anual">Anual (Descuenta Saldo)</option>
+                                    <option value="Especial">Especial (Estudio, Duelo, etc)</option>
+                                    <option value="Sin Goce">Sin Goce de Sueldo</option>
+                                    <option value="Adelantada">Adelantada</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Observaciones</label>
+                                <input type="text" value={manualForm.notes} onChange={e => setManualForm({...manualForm, notes: e.target.value})} placeholder="Motivo..." className="w-full p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl font-bold border-none text-rr-dark dark:text-white" />
+                            </div>
+
+                            <button 
+                                onClick={handleManualSubmit}
+                                disabled={isSaving || !manualForm.start || !manualForm.end}
+                                className="w-full py-5 bg-rr-dark text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-rr-orange transition-all shadow-lg flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSaving ? <Loader2 className="animate-spin" /> : <Save size={18}/>} Registrar Licencia
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 bg-white dark:bg-black/20 p-8 rounded-[2.5rem] border border-gray-100 dark:border-white/5 space-y-6">
                     <div className="flex justify-between items-center flex-wrap gap-4">
@@ -372,17 +371,25 @@ const EmployeeDetail: React.FC<{
                         ) : (
                             history.map(rec => {
                                 const isAdjustment = rec.type === 'AjusteSaldo';
+                                const isAgreed = rec.type === 'Acordado';
                                 const adjustmentColor = rec.days > 0 ? 'text-green-500' : 'text-red-500';
 
+                                // Estilo para días acordados
+                                const bgClass = isAgreed 
+                                    ? 'bg-indigo-50/50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-800' 
+                                    : 'bg-gray-50 dark:bg-white/5 border-transparent hover:border-gray-200 dark:hover:border-white/10';
+
                                 return (
-                                    <div key={rec.id} className={`p-4 rounded-2xl flex justify-between items-center group border transition-all ${rec.type === 'Acordado' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/30' : 'bg-gray-50 dark:bg-white/5 border-transparent hover:border-gray-200 dark:hover:border-white/10'}`}>
+                                    <div key={rec.id} className={`p-4 rounded-2xl flex justify-between items-center group border transition-all ${bgClass}`}>
                                         <div>
-                                            <p className="font-bold text-xs uppercase">{formatLeaveLabel(rec.type, rec.notes)}</p>
+                                            <p className={`font-bold text-xs uppercase ${isAgreed ? 'text-indigo-700 dark:text-indigo-300' : ''}`}>
+                                                {formatLeaveLabel(rec.type, rec.notes)}
+                                            </p>
                                             <p className="text-[10px] text-gray-400">{isAdjustment ? `Registrado: ${formatDateDisplay(rec.startDate)}` : `${formatDateDisplay(rec.startDate)} - ${formatDateDisplay(rec.endDate)}`}</p>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="text-right mr-2">
-                                                <span className={`font-black text-lg ${isAdjustment ? adjustmentColor : ''}`}>{isAdjustment && rec.days > 0 ? `+${rec.days}` : rec.days}d</span>
+                                                <span className={`font-black text-lg ${isAdjustment ? adjustmentColor : isAgreed ? 'text-indigo-700 dark:text-indigo-300' : ''}`}>{isAdjustment && rec.days > 0 ? `+${rec.days}` : rec.days}d</span>
                                                 <p className={`text-[9px] font-black uppercase ${rec.status === 'Aprobado' ? 'text-green-500' : 'text-yellow-500'}`}>{rec.status}</p>
                                             </div>
                                             
@@ -419,10 +426,10 @@ const EmployeeDetail: React.FC<{
                     <div className="bg-white dark:bg-black/20 p-6 rounded-[2.5rem] border border-gray-100 dark:border-white/5">
                         <h4 className="font-black uppercase text-xs mb-4 text-gray-400">Acciones Rápidas</h4>
                         <div className="space-y-3">
-                             <button onClick={() => setIsAddingLeave(true)} className="w-full py-4 bg-rr-orange text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-rr-orange-dark transition-colors">
-                                <CalendarPlus size={16}/> Cargar Licencia
+                            <button onClick={() => setShowManualModal(true)} className="w-full py-4 bg-rr-orange text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-rr-orange-dark transition-colors">
+                                <PlusCircle size={16}/> Agregar Licencia Manual
                             </button>
-                            <button onClick={() => generateEmployeeReport(employee, settings.agreedLeaveDays, dateRange)} className="w-full py-4 bg-rr-dark text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-gray-700 transition-colors">
+                            <button onClick={() => generateEmployeeReport(employee, settings.agreedLeaveDays, dateRange)} className="w-full py-4 bg-rr-dark text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-rr-orange transition-colors">
                                 <FileDown size={16}/> Descargar PDF (Vista Actual)
                             </button>
                             <button onClick={onEdit} className="w-full py-4 bg-gray-100 dark:bg-white/10 text-rr-dark dark:text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-gray-200">
@@ -472,7 +479,7 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
     // Verificar si ya hay días inicializados para el año actual
     const isYearInitialized = useMemo(() => {
-        return settings.agreedLeaveDays.some(d => d.date.startsWith(currentYear.toString()));
+        return settings.agreedLeaveDays.some(d => d.active && d.date.startsWith(currentYear.toString()));
     }, [settings.agreedLeaveDays, currentYear]);
 
     // -- LÓGICA PERSONAL --
