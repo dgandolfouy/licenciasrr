@@ -48,10 +48,10 @@ const HRHeatmap: React.FC = () => {
         return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-black'; 
     };
 
-    const monthName = viewDate.toLocaleString('es-UY', { month: 'long', year: 'numeric' }).toUpperCase();
+    const monthName = viewDate.toLocaleString('es-UY', { month: 'short', year: 'numeric' }).replace('.', '').toUpperCase();
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-700 mb-8">
+        <div className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-700">
             <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-3">
                     <Calendar className="text-rr-orange" size={24}/>
@@ -214,35 +214,7 @@ const HRView: React.FC = () => {
                 <Plus size={40} />
             </button>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 bg-rr-dark p-10 rounded-[3.5rem] shadow-2xl relative border border-white/5">
-                    <div className="flex flex-col gap-6">
-                        <div className="space-y-4">
-                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Noticias de Planta</h3>
-                            <textarea 
-                                value={newsText} 
-                                onChange={(e) => setNewsText(e.target.value)} 
-                                placeholder="Escribe el anuncio para toda la planta..." 
-                                className="w-full p-8 bg-white/5 text-white rounded-[2rem] border-none outline-none font-bold min-h-[140px] text-lg transition-all focus:bg-white/10" 
-                            />
-                            <button 
-                                disabled={isSaving}
-                                onClick={async () => { 
-                                    if(!newsText.trim()) return; 
-                                    await publishNews(newsText, user?.name || 'RRHH'); 
-                                    setNewsText(''); 
-                                }} 
-                                className="flex items-center gap-4 bg-rr-orange text-white px-10 py-6 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-rr-orange-dark transition-all shadow-xl disabled:opacity-50"
-                            >
-                                {isSaving ? <Loader2 className="animate-spin" /> : <Send size={24} />} Lanzar Comunicado
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div className="lg:col-span-1">
-                    <HRHeatmap />
-                </div>
-            </div>
+            <HRHeatmap />
 
             <div className="space-y-6">
                 <h3 className="text-2xl font-black uppercase text-rr-dark dark:text-white px-6">Bandeja de Entrada</h3>
@@ -299,6 +271,31 @@ const HRView: React.FC = () => {
                         ))}
                     </div>
                 )}
+            </div>
+
+            {/* PANEL DE NOTICIAS */}
+            <div className="bg-rr-dark p-8 rounded-[3rem] shadow-2xl border border-white/5 space-y-4">
+                <h3 className="text-lg font-black text-white uppercase tracking-tighter">Noticias de Planta</h3>
+                <div className="flex flex-col sm:flex-row gap-4">
+                    <textarea 
+                        value={newsText} 
+                        onChange={(e) => setNewsText(e.target.value)} 
+                        placeholder="Escribe un anuncio para toda la planta..." 
+                        className="flex-grow p-4 bg-white/5 text-white rounded-2xl border-none outline-none font-bold text-sm transition-all focus:bg-white/10" 
+                        rows={2}
+                    />
+                    <button 
+                        disabled={isSaving}
+                        onClick={async () => { 
+                            if(!newsText.trim()) return; 
+                            await publishNews(newsText, user?.name || 'RRHH'); 
+                            setNewsText(''); 
+                        }} 
+                        className="flex items-center justify-center gap-3 bg-rr-orange text-white px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-rr-orange-dark transition-all shadow-xl disabled:opacity-50"
+                    >
+                        {isSaving ? <Loader2 className="animate-spin" /> : <Send size={18} />} Lanzar
+                    </button>
+                </div>
             </div>
 
             {isManualOpen && (
