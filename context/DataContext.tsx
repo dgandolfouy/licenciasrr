@@ -411,12 +411,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
 
           const newDefaults = [
-              { id: `AG_${Date.now()}_1`, date: saturdays[0] || `${year}-01-02`, description: 'Sábado Enero 1', active: false },
-              { id: `AG_${Date.now()}_2`, date: saturdays[1] || `${year}-01-09`, description: 'Sábado Enero 2', active: false },
-              { id: `AG_${Date.now()}_3`, date: `${year}-02-24`, description: 'Feriado Carnaval 1', active: false },
-              { id: `AG_${Date.now()}_4`, date: `${year}-02-25`, description: 'Feriado Carnaval 2', active: false },
-              { id: `AG_${Date.now()}_5`, date: `${year}-04-10`, description: 'Semana Turismo 1', active: false },
-              { id: `AG_${Date.now()}_6`, date: `${year}-04-11`, description: 'Semana Turismo 2', active: false },
+              { id: `AG_${Date.now()}_1`, date: saturdays[0] || `${year}-01-02`, description: 'Sábado 1', active: false },
+              { id: `AG_${Date.now()}_2`, date: saturdays[1] || `${year}-01-09`, description: 'Sábado 2', active: false },
+              { id: `AG_${Date.now()}_3`, date: `${year}-02-24`, description: 'Carnaval 1', active: false },
+              { id: `AG_${Date.now()}_4`, date: `${year}-02-25`, description: 'Carnaval 2', active: false },
+              { id: `AG_${Date.now()}_5`, date: `${year}-04-10`, description: 'Turismo 1', active: false },
+              { id: `AG_${Date.now()}_6`, date: `${year}-04-11`, description: 'Turismo 2', active: false },
           ];
 
           const existingDates = new Set(settings.agreedLeaveDays.map(d => d.date));
