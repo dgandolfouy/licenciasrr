@@ -46,7 +46,7 @@ const EmployeeView: React.FC = () => {
     const [formError, setFormError] = useState<string | null>(null);
 
     // --- CONFIGURACIÓN WHATSAPP GERENCIA ---
-    const MANAGER_PHONE = '59895751833'; // REEMPLAZAR CON EL NUMERO REAL (formato internacional sin +)
+    const MANAGER_PHONE = '59899000000'; // REEMPLAZAR CON EL NUMERO REAL (formato internacional sin +)
 
     const daysRequested = useMemo(() => {
         if (!range.start || !range.end) return 0;
@@ -274,7 +274,10 @@ const EmployeeView: React.FC = () => {
                             <div className={`transition-[max-height] duration-500 ease-in-out ${isOpen ? 'max-h-[600px] overflow-y-auto custom-scrollbar' : 'max-h-0 overflow-hidden'}`}>
                                 <div className="p-8 pt-0 space-y-4">
                                     {records.map(r => (
-                                        <div key={r.id} className={`p-6 rounded-2xl flex flex-col border transition-all ${r.status === 'Rechazado' ? 'bg-red-50 border-red-100 dark:bg-red-900/10 dark:border-red-800' : 'bg-gray-50 border-transparent dark:bg-black/20'}`}>
+                                        <div key={r.id} className={`p-6 rounded-2xl flex flex-col border transition-all 
+                                            ${r.status === 'Rechazado' ? 'bg-red-50 border-red-100 dark:bg-red-900/10 dark:border-red-800' 
+                                            : r.type === 'Acordado' ? 'bg-blue-50 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800/50' 
+                                            : 'bg-gray-50 border-transparent dark:bg-black/20'}`}>
                                             <div className="flex justify-between items-center">
                                                 <div>
                                                     <p className={`font-black uppercase text-sm tracking-tight ${r.status === 'Rechazado' ? 'text-red-600' : 'text-rr-dark dark:text-white'}`}>
