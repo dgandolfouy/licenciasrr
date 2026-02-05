@@ -2,19 +2,20 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Trash2, X, Check, Search, Edit, Save, CalendarPlus, AlertTriangle, ShieldCheck, Loader2, UserPlus, FileDown, Archive, History, ArrowLeft, Filter, Sparkles, CheckCircle2, Lock, ShieldAlert, KeyRound } from './icons/LucideIcons';
-import { Employee, LeaveRecord, UserRole } from '../types';
-import { formatDateDisplay, getUnifiedHistory, formatLeaveLabel, calculateWorkingDays } from '../utils/leaveCalculator';
+import { Trash2, X, Check, Search, Edit, Save, CalendarPlus, AlertTriangle, ShieldCheck, Loader2, UserPlus, FileDown, Archive, History, ArrowLeft, Filter, Sparkles, CheckCircle2, Lock, ShieldAlert, KeyRound, PlusCircle } from './icons/LucideIcons';
+import { Employee, LeaveRecord, UserRole, User } from '../types';
+import { formatDateDisplay, getUnifiedHistory, formatLeaveLabel, calculateWorkingDays, getLeaveDaysSummary } from '../utils/leaveCalculator';
 import { generateEmployeeReport, generateGeneralReport } from '../services/pdfService';
 import { useToast } from '../context/ToastContext';
 
 // Subcomponente: Formulario de Empleado (Crear/Editar)
 const EmployeeForm: React.FC<{ 
     initialData?: Employee | null, 
-    onSave: (data: any) => Promise<void>, 
+    summary: any,
+    onSave: (data: any, adjustment: any) => Promise<void>, 
     onCancel: () => void,
     isSaving: boolean 
-}> = ({ initialData, onSave, onCancel, isSaving }) => {
+}> = ({ initialData, summary, onSave, onCancel, isSaving }) => {
     const [formData, setFormData] = useState({
         name: initialData?.name || '',
         lastName: initialData?.lastName || '',
@@ -23,17 +24,30 @@ const EmployeeForm: React.FC<{
         type: initialData?.type || 'Mensual',
         password: initialData?.password || ''
     });
+    const [adjustment, setAdjustment] = useState({ days: '', reason: '' });
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onSave(formData);
+        if (adjustment.days && !adjustment.reason) {
+            alert("Por favor, ingresa un motivo para el ajuste de saldo.");
+            return;
+        }
+        await onSave(formData, adjustment);
     };
 
     return (
         <div className="bg-white dark:bg-black/20 p-8 rounded-[3rem] shadow-sm border border-gray-100 dark:border-white/5 animate-fade-in">
-            <h3 className="text-xl font-black uppercase text-rr-dark dark:text-white mb-6">
-                {initialData ? `Editar: ${initialData.lastName}` : 'Nuevo Colaborador'}
-            </h3>
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">
+                <h3 className="text-xl font-black uppercase text-rr-dark dark:text-white">
+                    {initialData ? `Editar: ${initialData.lastName}` : 'Nuevo Colaborador'}
+                </h3>
+                {initialData && (
+                    <div className="bg-rr-orange/10 text-rr-orange px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest">
+                        Saldo Actual: {summary.remainingDays} Días
+                    </div>
+                )}
+            </div>
+            
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="space-y-2">
@@ -64,10 +78,42 @@ const EmployeeForm: React.FC<{
                         <input type="text" value={formData.password} onChange={(e)=>setFormData({...formData, password: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl font-bold border-none" placeholder="Opcional" />
                     </div>
                 </div>
-                <div className="flex gap-4 pt-4">
+
+                {initialData && (
+                    <div className="pt-6 border-t dark:border-white/10 mt-6">
+                        <h4 className="text-sm font-black uppercase text-gray-400 mb-4 flex items-center gap-2">
+                           <PlusCircle size={16}/> Ajuste de Saldo Manual
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 p-6 bg-gray-50 dark:bg-black/20 rounded-3xl">
+                             <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-4">Días a +/-</label>
+                                <input 
+                                    type="number" 
+                                    step="1"
+                                    value={adjustment.days} 
+                                    onChange={(e)=>setAdjustment({...adjustment, days: e.target.value})} 
+                                    className="w-full p-4 bg-white dark:bg-gray-800 rounded-2xl font-bold border-none" 
+                                    placeholder="Ej: 5 o -2"
+                                />
+                            </div>
+                            <div className="sm:col-span-2 space-y-2">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-4">Motivo del Ajuste</label>
+                                <input 
+                                    type="text" 
+                                    value={adjustment.reason} 
+                                    onChange={(e)=>setAdjustment({...adjustment, reason: e.target.value})} 
+                                    className="w-full p-4 bg-white dark:bg-gray-800 rounded-2xl font-bold border-none" 
+                                    placeholder="Saldo año anterior, compensación, etc."
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex gap-4 pt-8">
                     <button type="button" onClick={onCancel} className="flex-1 py-4 bg-gray-200 dark:bg-gray-700 rounded-2xl font-black uppercase text-xs">Cancelar</button>
                     <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-rr-orange text-white rounded-2xl font-black uppercase text-xs flex justify-center items-center gap-2">
-                        {isSaving ? <Loader2 className="animate-spin"/> : <Save size={18}/>} Guardar
+                        {isSaving ? <Loader2 className="animate-spin"/> : <Save size={18}/>} Guardar Cambios
                     </button>
                 </div>
             </form>
@@ -78,11 +124,13 @@ const EmployeeForm: React.FC<{
 // Subcomponente: Detalle del Empleado (Historial + Reportes)
 const EmployeeDetail: React.FC<{
     employee: Employee,
+    summary: any,
     onBack: () => void,
     onEdit: () => void,
     onToggleActive: () => void,
-    settings: any
-}> = ({ employee, onBack, onEdit, onToggleActive, settings }) => {
+    settings: any,
+    user: User | null
+}> = ({ employee, summary, onBack, onEdit, onToggleActive, settings, user }) => {
     const { deleteLeaveRecord, updateLeaveRecord, isSaving } = useData();
     const currentYear = new Date().getFullYear();
     const [dateRange, setDateRange] = useState({
@@ -150,11 +198,14 @@ const EmployeeDetail: React.FC<{
 
     return (
         <div className="space-y-8 animate-slide-in relative">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
                 <button onClick={onBack} className="p-3 bg-gray-100 dark:bg-white/10 rounded-xl hover:bg-gray-200"><ArrowLeft size={20}/></button>
                 <h3 className="text-2xl font-black uppercase text-rr-dark dark:text-white">{employee.lastName}, {employee.name}</h3>
                 <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${employee.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                     {employee.active ? 'Activo' : 'Archivado'}
+                </span>
+                <span className="bg-rr-orange/10 text-rr-orange px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest">
+                    {summary.remainingDays} Días Disponibles
                 </span>
             </div>
 
@@ -241,35 +292,42 @@ const EmployeeDetail: React.FC<{
                             <p className="text-center text-gray-400 text-xs py-10 uppercase">No hay registros en este rango</p>
                         ) : (
                             history.map(rec => {
+                                const isAdjustment = rec.type === 'AjusteSaldo';
+                                const adjustmentColor = rec.days > 0 ? 'text-green-500' : 'text-red-500';
+
                                 return (
                                     <div key={rec.id} className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl flex justify-between items-center group border border-transparent hover:border-gray-200 dark:hover:border-white/10 transition-all">
                                         <div>
                                             <p className="font-bold text-xs uppercase">{formatLeaveLabel(rec.type, rec.notes)}</p>
-                                            <p className="text-[10px] text-gray-400">{formatDateDisplay(rec.startDate)} - {formatDateDisplay(rec.endDate)}</p>
+                                            <p className="text-[10px] text-gray-400">{isAdjustment ? `Registrado: ${formatDateDisplay(rec.startDate)}` : `${formatDateDisplay(rec.startDate)} - ${formatDateDisplay(rec.endDate)}`}</p>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="text-right mr-2">
-                                                <span className="font-black text-lg">{rec.days}d</span>
+                                                <span className={`font-black text-lg ${isAdjustment ? adjustmentColor : ''}`}>{isAdjustment && rec.days > 0 ? `+${rec.days}` : rec.days}d</span>
                                                 <p className={`text-[9px] font-black uppercase ${rec.status === 'Aprobado' ? 'text-green-500' : 'text-yellow-500'}`}>{rec.status}</p>
                                             </div>
                                             
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); setEditingRecord(rec); }} 
-                                                disabled={isSaving}
-                                                className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-all shadow-sm border border-gray-100 dark:border-white/5"
-                                                title="Editar"
-                                            >
-                                                <Edit size={16} />
-                                            </button>
+                                            {!isAdjustment && user?.id === '40069799' && (
+                                                <>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); setEditingRecord(rec); }} 
+                                                    disabled={isSaving}
+                                                    className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-all shadow-sm border border-gray-100 dark:border-white/5"
+                                                    title="Editar"
+                                                >
+                                                    <Edit size={16} />
+                                                </button>
 
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); setDeletingRecord(rec); }} 
-                                                disabled={isSaving}
-                                                className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-all shadow-sm border border-gray-100 dark:border-white/5"
-                                                title="Eliminar"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); setDeletingRecord(rec); }} 
+                                                    disabled={isSaving}
+                                                    className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-all shadow-sm border border-gray-100 dark:border-white/5"
+                                                    title="Eliminar"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -304,7 +362,7 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const { user } = useAuth();
     const { settings, updateSettings, addAgreedDay, updateAgreedDay, applyAgreedDaysToAll, employees, addEmployee, updateEmployee, toggleEmployeeStatus, isSaving, initializeYearlyAgreedDays, resetDatabase } = useData();
     const { showToast } = useToast();
-    const [activeTab, setActiveTab] = useState<'personal' | 'days'>('days');
+    const [activeTab, setActiveTab] = useState<'personal' | 'days'>('personal');
     const currentYear = new Date().getFullYear();
     
     // Estados para "Personal"
@@ -364,13 +422,38 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         generateGeneralReport(selectedEmps, bulkDateRange, settings.agreedLeaveDays);
     };
 
-    const handleSaveEmployee = async (data: any) => {
-        if (viewMode === 'create') {
-            await addEmployee(data);
-        } else {
-            await updateEmployee(data, selectedEmpId || undefined);
+    const handleSaveEmployee = async (formData: any, adjustmentData: any) => {
+        let updatedEmployeeData = { ...formData };
+        
+        if (viewMode === 'edit' && selectedEmpId) {
+            const originalEmployee = employees.find(e => e.id === selectedEmpId);
+            if (!originalEmployee) return;
+
+            updatedEmployeeData = { ...originalEmployee, ...formData };
+        
+            if (adjustmentData.days && adjustmentData.reason) {
+                const newAdjustmentRecord: LeaveRecord = {
+                    id: `ADJ_${Date.now()}`,
+                    type: 'AjusteSaldo',
+                    startDate: new Date().toISOString().split('T')[0],
+                    endDate: new Date().toISOString().split('T')[0],
+                    days: parseInt(adjustmentData.days, 10),
+                    notes: adjustmentData.reason,
+                    year: new Date().getFullYear(),
+                };
+                
+                updatedEmployeeData.leaveRecords = [...(updatedEmployeeData.leaveRecords || []), newAdjustmentRecord];
+                showToast(`Ajuste de ${adjustmentData.days} días registrado.`, 'success');
+            }
         }
-        setViewMode('list');
+        
+        if (viewMode === 'create') {
+            await addEmployee(updatedEmployeeData);
+        } else {
+            await updateEmployee(updatedEmployeeData, selectedEmpId || undefined);
+        }
+        
+        setViewMode('detail');
     };
 
     // -- LÓGICA DAYS --
@@ -431,6 +514,10 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             resetDatabase('full_reset');
         });
     };
+
+    const selectedEmployee = useMemo(() => employees.find(e => e.id === selectedEmpId), [employees, selectedEmpId]);
+    const summary = useMemo(() => selectedEmployee ? getLeaveDaysSummary(selectedEmployee, currentYear, settings.agreedLeaveDays) : null, [selectedEmployee, currentYear, settings.agreedLeaveDays]);
+
 
     return (
         <div className="max-w-6xl mx-auto animate-fade-in space-y-10 pb-20 px-4 sm:px-0 relative">
@@ -588,22 +675,26 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                                 onSave={handleSaveEmployee} 
                                 onCancel={() => setViewMode('list')} 
                                 isSaving={isSaving}
+                                summary={null}
                             />
                         )}
 
-                        {viewMode === 'detail' && selectedEmpId && (
+                        {viewMode === 'detail' && selectedEmployee && summary && (
                             <EmployeeDetail 
-                                employee={employees.find(e => e.id === selectedEmpId)!}
+                                employee={selectedEmployee}
+                                summary={summary}
                                 onBack={() => { setViewMode('list'); setSelectedEmpId(null); }}
                                 onEdit={() => setViewMode('edit')}
-                                onToggleActive={() => toggleEmployeeStatus(selectedEmpId, !employees.find(e => e.id === selectedEmpId)!.active)}
+                                onToggleActive={() => toggleEmployeeStatus(selectedEmpId!, !selectedEmployee.active)}
                                 settings={settings}
+                                user={user}
                             />
                         )}
 
-                        {viewMode === 'edit' && selectedEmpId && (
+                        {viewMode === 'edit' && selectedEmployee && summary && (
                             <EmployeeForm 
-                                initialData={employees.find(e => e.id === selectedEmpId)}
+                                initialData={selectedEmployee}
+                                summary={summary}
                                 onSave={handleSaveEmployee}
                                 onCancel={() => setViewMode('detail')}
                                 isSaving={isSaving}

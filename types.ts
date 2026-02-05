@@ -30,7 +30,7 @@ export interface LeaveRequest {
 
 export interface LeaveRecord {
   id: string;
-  type: 'Anual' | 'Especial' | 'Adelantada' | 'Acordado' | 'Sin Goce' | 'Excepcion';
+  type: 'Anual' | 'Especial' | 'Adelantada' | 'Acordado' | 'Sin Goce' | 'Excepcion' | 'AjusteSaldo';
   specialType?: string;
   startDate: string;
   endDate: string;

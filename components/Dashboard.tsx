@@ -2,7 +2,7 @@
 import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
-import { LogOut, Settings, Sun, Moon, TrendingUp, Home, User, ShieldCheck, FileText, X, Mail, Clock, FolderOpen } from './icons/LucideIcons';
+import { LogOut, Settings, Sun, Moon, TrendingUp, Home, User, ShieldCheck, FileText, X, Mail, Clock, FolderOpen, Info } from './icons/LucideIcons';
 import { Logo } from './icons/Logo';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
@@ -30,15 +30,7 @@ const Dashboard: React.FC = () => {
 
     useEffect(() => {
         if (user) {
-            // Si es OPERARIO, forzamos modo colaborador, pero mantenemos la pantalla de selección si así se desea
-            // O podemos dejar que el renderRoleSelection maneje la UI. 
-            // En este caso, para cumplir con el centrado visual, dejamos que el usuario seleccione,
-            // pero si quieres que entren directo, descomenta lo siguiente:
-            /*
-            if (user.role === UserRole.OPERARIO) {
-                setSelectedMode('COLABORADOR');
-            }
-            */
+            // Si es OPERARIO, forzamos modo colaborador si se desea
         }
     }, [user]);
 
@@ -52,11 +44,14 @@ const Dashboard: React.FC = () => {
 
     const employee = getEmployeeById(user.id);
     const hasUnread = employee?.hasUnreadNews;
-    const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.RRHH;
+    
+    // Lista explícita de administradores por Cédula + Roles
+    const ADMIN_IDS = ['35750440', '40069799'];
+    const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.RRHH || ADMIN_IDS.includes(user.id);
 
     const capitalize = (str: string) => {
         if (!str) return 'Usuario';
-        // 1. Eliminamos tildes (NFD separa 'ó' en 'o' + '´', el replace borra el '´')
+        // 1. Eliminamos tildes (Normalización NFD + Regex)
         const cleanStr = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         // 2. Capitalizamos cada palabra correctamente
         return cleanStr.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
@@ -86,25 +81,46 @@ const Dashboard: React.FC = () => {
     const renderNotifications = () => {
         return (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-10 animate-fade-in">
-                <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-[3rem] shadow-2xl relative border dark:border-gray-700 flex flex-col max-h-[80vh] overflow-hidden">
-                    <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                            <Mail className="text-rr-orange" size={24}/>
-                            <h2 className="text-lg font-black uppercase tracking-tight text-rr-dark dark:text-white">Comunicados</h2>
+                <div className="bg-white dark:bg-[#1a1f2e] w-full max-w-2xl rounded-[3rem] shadow-2xl relative border-4 border-white/10 flex flex-col max-h-[80vh] overflow-hidden">
+                    <div className="p-8 bg-rr-dark flex justify-between items-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-rr-orange opacity-10 rounded-full blur-3xl transform translate-x-10 -translate-y-10"></div>
+                        <div className="flex items-center gap-4 relative z-10">
+                            <div className="p-3 bg-white/10 rounded-2xl text-rr-orange backdrop-blur-sm">
+                                <Mail size={24} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black uppercase tracking-tight text-white">Comunicados</h2>
+                                <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Historial de Mensajes</p>
+                            </div>
                         </div>
-                        <button onClick={() => { setView('home'); if (user.id) clearUnreadNews(user.id); }} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button>
+                        <button onClick={() => { setView('home'); if (user.id) clearUnreadNews(user.id); }} className="p-3 bg-white/5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-all z-10"><X size={20}/></button>
                     </div>
-                    <div className="p-8 overflow-y-auto space-y-4">
+                    
+                    <div className="p-8 overflow-y-auto space-y-6 custom-scrollbar bg-gray-50 dark:bg-[#111]">
                         {myNotifications.length === 0 ? (
-                            <p className="text-center text-gray-400 py-10">No hay mensajes anteriores</p>
+                            <div className="flex flex-col items-center justify-center py-20 text-gray-400 space-y-4">
+                                <Mail size={48} className="opacity-20"/>
+                                <p className="text-sm font-bold uppercase tracking-widest opacity-50">Bandeja Vacía</p>
+                            </div>
                         ) : (
-                            myNotifications.map(news => (
-                                <div key={news.id} className="p-6 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-[10px] font-black text-rr-orange uppercase tracking-widest">{news.author}</span>
-                                        <span className="text-[9px] font-bold text-gray-400 flex items-center gap-1"><Clock size={10}/> {new Date(news.date).toLocaleDateString('es-UY')}</span>
+                            myNotifications.map((news, idx) => (
+                                <div key={news.id} className="group relative bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm hover:shadow-lg transition-all border-l-4 border-rr-orange overflow-hidden">
+                                    <div className="absolute top-4 right-6 text-[9px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-widest flex items-center gap-1">
+                                        <Clock size={10}/> {new Date(news.date).toLocaleDateString('es-UY')}
                                     </div>
-                                    <p className="text-gray-600 dark:text-gray-300 font-bold italic">"{news.content}"</p>
+                                    <div className="flex gap-4 items-start">
+                                        <div className="mt-1 p-2 bg-rr-orange/10 rounded-xl text-rr-orange shrink-0">
+                                            {news.author === 'Sistema' ? <Info size={18}/> : <Mail size={18}/>}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] font-black text-rr-orange uppercase tracking-widest bg-rr-orange/5 inline-block px-2 py-1 rounded-md mb-1">
+                                                {news.author}
+                                            </p>
+                                            <p className="text-gray-600 dark:text-gray-300 font-medium leading-relaxed italic text-sm">
+                                                "{news.content}"
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             ))
                         )}
@@ -124,8 +140,11 @@ const Dashboard: React.FC = () => {
                 <p className="text-gray-400 font-bold uppercase tracking-[0.4em] text-[10px] opacity-70">Selecciona el área de trabajo</p>
             </div>
             
-            {/* Lógica de Grid: Si es Admin (Cristina/Daniel) mantiene 2 columnas. Si es usuario normal, 1 columna centrada y más angosta */}
-            <div className={`grid gap-8 w-full px-4 transition-all ${isAdmin ? 'grid-cols-1 md:grid-cols-2 max-w-2xl' : 'grid-cols-1 max-w-sm'}`}>
+            {/* Lógica de Grid: 
+                - ADMINS (Cristina/Daniel): 2 Columnas
+                - RESTO: 1 Columna Centrada (mx-auto, max-w-xs)
+            */}
+            <div className={`grid gap-8 w-full px-4 transition-all ${isAdmin ? 'grid-cols-1 md:grid-cols-2 max-w-2xl' : 'grid-cols-1 max-w-xs mx-auto'}`}>
                 <button onClick={() => setSelectedMode('COLABORADOR')} className="group bg-white dark:bg-gray-800 p-12 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-700 hover:border-rr-orange transition-all flex flex-col items-center gap-6 w-full">
                     <User size={56} className="text-gray-200 group-hover:text-rr-orange transition-colors" />
                     <h3 className="text-lg font-black uppercase text-rr-dark dark:text-white tracking-widest">Portal Personal</h3>

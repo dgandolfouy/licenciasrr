@@ -120,11 +120,15 @@ export const getLeaveDaysSummary = (
   if (!employee) return empty;
 
   try {
-      // 1. Calcular Saldo Generado (Proporcional + Antigüedad)
+      // 1. Calcular Saldo Generado (Proporcional + Antigüedad + Ajustes)
       const baseDays = calculateBaseGeneratedDays(employee.hireDate, targetYear);
       const seniorityDays = calculateSeniorityDays(employee.hireDate);
       
-      const totalGenerated = baseDays + seniorityDays;
+      const adjustments = (employee.leaveRecords || [])
+          .filter(r => r.type === 'AjusteSaldo' && r.year === targetYear)
+          .reduce((acc, r) => acc + r.days, 0);
+
+      const totalGenerated = baseDays + seniorityDays + adjustments;
       const availablePool = totalGenerated;
 
       // 2. Identificar Excepciones (Días acordados que este empleado NO toma)
@@ -154,7 +158,7 @@ export const getLeaveDaysSummary = (
           
           // Ignoramos tipos especiales que no descuentan
           const isSpecialAndJustified = r.type === 'Especial' && r.justified === true;
-          const shouldCount = r.type !== 'Acordado' && r.type !== 'Excepcion' && !isSpecialAndJustified;
+          const shouldCount = r.type !== 'Acordado' && r.type !== 'Excepcion' && !isSpecialAndJustified && r.type !== 'AjusteSaldo';
 
           if (recYear === targetYear && shouldCount) {
               const daysInRange = getDatesInRange(r.startDate, r.endDate);
@@ -235,6 +239,19 @@ export const getUnifiedHistory = (employee: Employee, settingsAgreedDays: Agreed
     // 2. Procesar Registros Personales
     (employee.leaveRecords || []).forEach(r => {
         if (r.type === 'Excepcion') return; // No mostrar las excepciones en la lista visual
+        if (r.type === 'AjusteSaldo') {
+            history.push({
+                id: r.id,
+                startDate: r.startDate,
+                endDate: r.endDate,
+                type: 'AjusteSaldo',
+                days: r.days,
+                notes: r.notes || 'Ajuste manual de saldo',
+                status: 'Aprobado',
+                year: r.year,
+            });
+            return;
+        }
 
         let effectiveDays = 0;
         const daysInRange = getDatesInRange(r.startDate, r.endDate);
@@ -299,6 +316,7 @@ export const formatLeaveLabel = (type: string, notes: string = ''): string => {
     if (type === 'Acordado') return 'Licencia Acordada';
     if (type === 'Anual') return 'Licencia Anual';
     if (type === 'Sin Goce') return 'Licencia S/G Sueldo';
+    if (type === 'AjusteSaldo') return 'Ajuste de Saldo Manual';
     
     return type; 
 };
