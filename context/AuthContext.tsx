@@ -27,28 +27,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log(`[Auth] Intentando login para ID: ${id}`);
       
-      // 1. Buscamos el usuario en Supabase
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, name, lastName, password, role')
-        .eq('id', id)
-        .maybeSingle();
+      // 1. Llamamos a la función segura en Supabase (RPC)
+      // En lugar de traer la contraseña, enviamos las credenciales para que el servidor verifique.
+      const { data, error } = await supabase.rpc('login_con_cedula', {
+        cedula_ingresada: id,
+        password_ingresada: password
+      });
 
       if (error) {
-        console.error('[Auth] Error conectando con Supabase:', error.message);
+        console.error('[Auth] Error llamando a la función de login:', error.message);
         return false;
       }
 
-      if (!data) {
-        console.warn('[Auth] Usuario no encontrado en la base de datos.');
-        return false;
-      }
-      
-      console.log('[Auth] Usuario encontrado. Verificando contraseña...');
-
-      // 2. Verificamos la contraseña (texto plano según tu lógica actual)
-      // Convertimos a String para asegurar comparación segura
-      if (String(data.password).trim() === String(password).trim()) {
+      // 2. La función devuelve los datos del usuario si el login es correcto, o null si no lo es.
+      if (data) {
         const userToSave: User = {
           id: data.id,
           name: data.name,
@@ -57,13 +49,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         setUser(userToSave);
         localStorage.setItem('user_session', JSON.stringify(userToSave));
-        console.log('[Auth] Login exitoso.');
+        console.log('[Auth] Login exitoso vía RPC.');
         return true;
       } else {
-        console.warn('[Auth] Contraseña incorrecta.');
+        console.warn('[Auth] Credenciales incorrectas (devuelto por RPC).');
+        return false;
       }
-      
-      return false;
     } catch (e) {
       console.error('[Auth] Error inesperado:', e);
       return false;
