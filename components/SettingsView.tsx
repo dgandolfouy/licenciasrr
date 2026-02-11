@@ -22,7 +22,7 @@ const EmployeeForm: React.FC<{
         id: initialData?.id || '',
         hireDate: initialData?.hireDate || '',
         type: initialData?.type || 'Mensual',
-        password: '' // Siempre empezamos con la contraseña vacía en el form
+        password: initialData?.password || ''
     });
     const [adjustment, setAdjustment] = useState({ days: '', reason: '' });
 
@@ -74,16 +74,8 @@ const EmployeeForm: React.FC<{
                         </select>
                     </div>
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-500 uppercase ml-4">
-                            {initialData ? 'Cambiar Contraseña' : 'Contraseña Inicial'}
-                        </label>
-                        <input 
-                            type="text" 
-                            value={formData.password} 
-                            onChange={(e)=>setFormData({...formData, password: e.target.value})} 
-                            className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl font-bold border-none" 
-                            placeholder={initialData ? "Dejar en blanco para no cambiar" : "Opcional"}
-                        />
+                        <label className="text-[10px] font-black text-gray-500 uppercase ml-4">Contraseña Inicial</label>
+                        <input type="text" value={formData.password} onChange={(e)=>setFormData({...formData, password: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl font-bold border-none" placeholder="Opcional" />
                     </div>
                 </div>
 
@@ -129,9 +121,6 @@ const EmployeeForm: React.FC<{
     );
 };
 
-// ... (El resto del archivo `SettingsView.tsx` no necesita cambios)
-// ...
-// --- COMIENZA EL RESTO DEL ARCHIVO ---
 // Subcomponente: Detalle del Empleado (Historial + Reportes)
 const EmployeeDetail: React.FC<{
     employee: Employee,
@@ -523,7 +512,7 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     };
 
     const handleSaveEmployee = async (formData: any, adjustmentData: any) => {
-        let updatedEmployeeData: any = { ...formData };
+        let updatedEmployeeData = { ...formData };
         
         if (viewMode === 'edit' && selectedEmpId) {
             const originalEmployee = employees.find(e => e.id === selectedEmpId);
@@ -545,25 +534,15 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 updatedEmployeeData.leaveRecords = [...(updatedEmployeeData.leaveRecords || []), newAdjustmentRecord];
                 showToast(`Ajuste de ${adjustmentData.days} días registrado.`, 'success');
             }
-            
-            // Si la contraseña está vacía, no la incluimos en la actualización
-            if (!updatedEmployeeData.password) {
-                delete updatedEmployeeData.password;
-            }
-
-        } else if (viewMode === 'create') {
-             if (!updatedEmployeeData.password) {
-                delete updatedEmployeeData.password;
-            }
         }
         
         if (viewMode === 'create') {
             await addEmployee(updatedEmployeeData);
-            setViewMode('list');
         } else {
             await updateEmployee(updatedEmployeeData, selectedEmpId || undefined);
-            setViewMode('detail');
         }
+        
+        setViewMode('detail');
     };
 
     // -- LÓGICA DAYS --
