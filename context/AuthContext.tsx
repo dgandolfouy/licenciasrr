@@ -1,7 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { supabase } from '../services/supabaseClient';
-import { Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
@@ -16,76 +15,64 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Al cargar, intenta recuperar el perfil desde localStorage para la sesión manual
   useEffect(() => {
-    setLoading(true);
-    try {
-        const storedProfile = localStorage.getItem('user_profile');
-        if (storedProfile) {
-            const userProfile: User = JSON.parse(storedProfile);
-            // Verificamos si el perfil aún es válido en la DB
-            const verifyUser = async () => {
-                const { data } = await supabase.from('employees').select('id').eq('id', userProfile.id).single();
-                if(data) {
-                    setUser(userProfile);
-                } else {
-                    localStorage.removeItem('user_profile');
-                }
-                setLoading(false);
-            };
-            verifyUser();
-        } else {
-            setLoading(false);
-        }
-    } catch (e) {
-        localStorage.removeItem('user_profile');
-        setLoading(false);
+    const storedUser = localStorage.getItem('user_session');
+    if (storedUser) {
+        setUser(JSON.parse(storedUser));
     }
+    setLoading(false);
   }, []);
 
   const login = async (id: string, password?: string): Promise<boolean> => {
-    if (!password || !id) return false;
-    
-    // --- LÓGICA DE LOGIN MANUAL ORIGINAL ---
-    const { data: employee, error } = await supabase
+    try {
+      console.log(`[Auth] Intentando login para ID: ${id}`);
+      
+      // 1. Buscamos el usuario en Supabase
+      const { data, error } = await supabase
         .from('employees')
-        .select('id, name, lastName, role, password, active')
+        .select('id, name, lastName, password, role')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
-    if (error || !employee) {
-        console.error('Login error (manual):', error?.message || 'Employee not found');
+      if (error) {
+        console.error('[Auth] Error conectando con Supabase:', error.message);
         return false;
-    }
+      }
 
-    if (!employee.active) {
-        console.error('Login error (manual): User is inactive');
+      if (!data) {
+        console.warn('[Auth] Usuario no encontrado en la base de datos.');
         return false;
-    }
-    
-    // Comparamos la contraseña en texto plano de la tabla 'employees'
-    if (employee.password === password) {
-        const userProfile: User = {
-            id: employee.id,
-            name: employee.name,
-            lastName: employee.lastName,
-            role: employee.role as UserRole,
+      }
+      
+      console.log('[Auth] Usuario encontrado. Verificando contraseña...');
+
+      // 2. Verificamos la contraseña (texto plano según tu lógica actual)
+      // Convertimos a String para asegurar comparación segura
+      if (String(data.password).trim() === String(password).trim()) {
+        const userToSave: User = {
+          id: data.id,
+          name: data.name,
+          lastName: data.lastName,
+          role: data.role as UserRole,
         };
-        setUser(userProfile);
-        // Guardamos en localStorage para persistir la sesión manual
-        localStorage.setItem('user_profile', JSON.stringify(userProfile));
+        setUser(userToSave);
+        localStorage.setItem('user_session', JSON.stringify(userToSave));
+        console.log('[Auth] Login exitoso.');
         return true;
+      } else {
+        console.warn('[Auth] Contraseña incorrecta.');
+      }
+      
+      return false;
+    } catch (e) {
+      console.error('[Auth] Error inesperado:', e);
+      return false;
     }
-    
-    return false;
   };
 
-  const logout = async () => {
-    // Al usar el login manual, solo necesitamos limpiar el estado local y el localStorage
-    localStorage.removeItem('user_profile');
+  const logout = () => {
     setUser(null);
-    // Adicionalmente, intentamos cerrar cualquier sesión de Supabase por si acaso
-    await supabase.auth.signOut().catch(console.error);
+    localStorage.removeItem('user_session');
   };
 
   return (
