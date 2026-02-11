@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { supabase } from '../services/supabaseClient';
+import { Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
@@ -11,68 +12,73 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper para buscar el perfil del empleado usando la Cédula (extraída del email de la sesión)
+const fetchUserProfile = async (session: Session | null): Promise<User | null> => {
+    if (!session?.user) return null;
+
+    // El email en Supabase Auth es "CEDULA@rreetiquetas.com.uy"
+    // Extraemos la cédula para buscar en la tabla 'employees'
+    const cedula = session.user.email?.split('@')[0];
+    if (!cedula) return null;
+
+    const { data, error } = await supabase
+        .from('employees')
+        .select('id, name, lastName, role')
+        .eq('id', cedula)
+        .single();
+
+    if (error || !data) {
+        console.error("Error al buscar el perfil del empleado:", error);
+        // Cerramos la sesión si el perfil no se encuentra para evitar un estado inconsistente
+        await supabase.auth.signOut();
+        return null;
+    }
+    
+    return {
+        id: data.id,
+        name: data.name,
+        lastName: data.lastName,
+        role: data.role as UserRole,
+    };
+};
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Se suscribe a los cambios de autenticación de Supabase (login, logout, refresh)
   useEffect(() => {
-    const storedUser = localStorage.getItem('user_session');
-    if (storedUser) {
-        setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+    setLoading(true);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        const userProfile = await fetchUserProfile(session);
+        setUser(userProfile);
+        setLoading(false);
+    });
+
+    return () => {
+        subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (id: string, password?: string): Promise<boolean> => {
-    try {
-      console.log(`[Auth] Intentando login para ID: ${id}`);
-      
-      // 1. Buscamos el usuario en Supabase
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, name, lastName, password, role')
-        .eq('id', id)
-        .maybeSingle();
+    if (!password || !id) return false;
+    
+    // Lógica original con Supabase Auth
+    const email = `${id}@rreetiquetas.com.uy`;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-      if (error) {
-        console.error('[Auth] Error conectando con Supabase:', error.message);
+    if (error) {
+        console.error('Error de inicio de sesión:', error.message);
         return false;
-      }
-
-      if (!data) {
-        console.warn('[Auth] Usuario no encontrado en la base de datos.');
-        return false;
-      }
-      
-      console.log('[Auth] Usuario encontrado. Verificando contraseña...');
-
-      // 2. Verificamos la contraseña (texto plano según tu lógica actual)
-      // Convertimos a String para asegurar comparación segura
-      if (String(data.password).trim() === String(password).trim()) {
-        const userToSave: User = {
-          id: data.id,
-          name: data.name,
-          lastName: data.lastName,
-          role: data.role as UserRole,
-        };
-        setUser(userToSave);
-        localStorage.setItem('user_session', JSON.stringify(userToSave));
-        console.log('[Auth] Login exitoso.');
-        return true;
-      } else {
-        console.warn('[Auth] Contraseña incorrecta.');
-      }
-      
-      return false;
-    } catch (e) {
-      console.error('[Auth] Error inesperado:', e);
-      return false;
     }
+
+    // Si el login es exitoso, onAuthStateChange se activará y buscará el perfil
+    return !!data.session;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('user_session');
   };
 
   return (
