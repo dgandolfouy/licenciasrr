@@ -12,7 +12,7 @@ interface DataContextType {
   loading: boolean;
   isSaving: boolean;
   getEmployeeById: (id: string) => Employee | undefined;
-  addEmployee: (employee: Omit<Employee, 'leaveRecords' | 'requests'>) => Promise<void>;
+  addEmployee: (employee: Omit<Employee, 'leaveRecords' | 'requests' | 'role'>) => Promise<void>;
   updateEmployee: (employee: Employee, oldId?: string) => Promise<void>; 
   toggleEmployeeStatus: (id: string, active: boolean) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>; 
@@ -53,7 +53,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!force && isSavingRef.current) return;
 
     try {
-      const { data: eData, error: eError } = await supabase.from('employees').select('*');
+      const { data: eData, error: eError } = await supabase
+        .from('employees')
+        .select('id, name, lastName, role, hireDate, birthDate, type, active, leaveRecords, requests, hasUnreadNews, readNewsIds');
+        
       const { data: sData, error: sError } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
 
       if (eError) throw eError;
@@ -110,7 +113,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addEmployee: DataContextType['addEmployee'] = async (newEmp) => {
     setIsSaving(true);
     try {
-        const employeeData: Employee = {
+        const employeeData: Omit<Employee, 'role'> = {
             ...newEmp,
             active: true,
             leaveRecords: [],
@@ -130,28 +133,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateEmployee: DataContextType['updateEmployee'] = async (updated, oldId) => {
     setIsSaving(true);
     try {
-      const targetId = oldId || updated.id;
+        const targetId = oldId || updated.id;
+        
+        // Preparamos el payload de forma segura
+        const payload: Partial<Employee> = { ...updated };
+        
+        // Si la contraseña está vacía, la eliminamos del payload para no sobreescribirla
+        if (payload.password === '') {
+            delete payload.password;
+        }
 
-      if (oldId && oldId !== updated.id) {
-          const { data } = await supabase.from('employees').select('id').eq('id', updated.id).maybeSingle();
-          if (data) throw new Error(`El nuevo ID ${updated.id} ya existe en el sistema.`);
-      }
+        const { error } = await supabase.rpc('update_employee_admin', {
+            target_id: targetId,
+            new_data: payload
+        });
 
-      const { error } = await supabase.from('employees').update(updated).eq('id', targetId);
-      if (error) throw error;
-      
-      setEmployees(prev => prev.map(e => e.id === targetId ? updated : e));
-      
-      if(oldId && oldId !== updated.id) {
-          showToast(`Cédula actualizada: ${oldId} -> ${updated.id}`, 'success');
-      } else {
-          showToast("Datos actualizados correctamente.", 'success');
-      }
-      
+        if (error) throw error;
+
+        setEmployees(prev => prev.map(e => e.id === targetId ? { ...e, ...payload } : e));
+        
+        showToast("Datos actualizados correctamente.", 'success');
+        
     } catch (e: any) {
-      showToast("Error al actualizar: " + e.message, 'error');
+        showToast("Error al actualizar: " + e.message, 'error');
     } finally {
-      setIsSaving(false);
+        setIsSaving(false);
     }
   };
 
