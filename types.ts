@@ -46,7 +46,6 @@ export interface Employee {
   id: string; 
   name: string;
   lastName: string;
-  role: UserRole;
   hireDate: string;
   birthDate: string; 
   type: EmployeeType;
