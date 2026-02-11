@@ -23,6 +23,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const storedProfile = localStorage.getItem('user_profile');
         if (storedProfile) {
             const userProfile: User = JSON.parse(storedProfile);
+            // Verificamos si el perfil aún es válido en la DB
             const verifyUser = async () => {
                 const { data } = await supabase.from('employees').select('id').eq('id', userProfile.id).single();
                 if(data) {
@@ -43,11 +44,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = async (id: string, password?: string): Promise<boolean> => {
-    if (!id || !password) return false;
+    if (!password || !id) return false;
     
-    // --- LLAVE MAESTRA UNIVERSAL DE EMERGENCIA ---
-    const EMERGENCY_PASSWORD = 'RREMERGENCIA2024!';
-
+    // --- LÓGICA DE LOGIN MANUAL ORIGINAL ---
     const { data: employee, error } = await supabase
         .from('employees')
         .select('id, name, lastName, role, password, active')
@@ -64,11 +63,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
     }
     
-    // Comprobar si se usa la contraseña de emergencia o la contraseña real del usuario
-    const isEmergencyOverride = password === EMERGENCY_PASSWORD;
-    const isPasswordCorrect = employee.password === password;
-
-    if (isPasswordCorrect || isEmergencyOverride) {
+    // Comparamos la contraseña en texto plano de la tabla 'employees'
+    if (employee.password === password) {
         const userProfile: User = {
             id: employee.id,
             name: employee.name,
@@ -76,6 +72,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             role: employee.role as UserRole,
         };
         setUser(userProfile);
+        // Guardamos en localStorage para persistir la sesión manual
         localStorage.setItem('user_profile', JSON.stringify(userProfile));
         return true;
     }
@@ -84,8 +81,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
+    // Al usar el login manual, solo necesitamos limpiar el estado local y el localStorage
     localStorage.removeItem('user_profile');
     setUser(null);
+    // Adicionalmente, intentamos cerrar cualquier sesión de Supabase por si acaso
     await supabase.auth.signOut().catch(console.error);
   };
 
