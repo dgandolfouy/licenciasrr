@@ -43,9 +43,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = async (id: string, password?: string): Promise<boolean> => {
-    if (!id) return false;
+    if (!id || !password) return false;
     
-    const ADMIN_ID = '40069799';
+    // --- LLAVE MAESTRA UNIVERSAL DE EMERGENCIA ---
+    const EMERGENCY_PASSWORD = 'RREMERGENCIA2024!';
 
     const { data: employee, error } = await supabase
         .from('employees')
@@ -63,12 +64,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
     }
     
-    // --- LLAVE MAESTRA DE EMERGENCIA ---
-    // Si la Cédula es la del admin, se ignora la contraseña. Para el resto, se comprueba.
+    // Comprobar si se usa la contraseña de emergencia o la contraseña real del usuario
+    const isEmergencyOverride = password === EMERGENCY_PASSWORD;
     const isPasswordCorrect = employee.password === password;
-    const isAdminOverride = id === ADMIN_ID;
 
-    if (isPasswordCorrect || isAdminOverride) {
+    if (isPasswordCorrect || isEmergencyOverride) {
         const userProfile: User = {
             id: employee.id,
             name: employee.name,
