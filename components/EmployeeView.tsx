@@ -275,7 +275,6 @@ const EmployeeView: React.FC = () => {
                                 <div className="p-8 pt-0 space-y-4">
                                     {records.map(r => {
                                         const isAgreed = r.type === 'Acordado';
-                                        const isSaturday = isAgreed && r.notes?.toLowerCase().includes('sábado');
                                         let bgClass = 'bg-gray-50 border-transparent dark:bg-black/20';
                                         
                                         if (r.status === 'Rechazado') {
@@ -291,7 +290,6 @@ const EmployeeView: React.FC = () => {
                                                 <div>
                                                     <p className={`font-black uppercase text-sm tracking-tight ${r.status === 'Rechazado' ? 'text-red-600' : isAgreed ? 'text-indigo-700 dark:text-indigo-300' : 'text-rr-dark dark:text-white'}`}>
                                                         {formatLeaveLabel(r.type, r.notes)}
-                                                        {isSaturday && <span className="text-rr-orange ml-1">*</span>}
                                                         {r.status === 'Pendiente' ? ' (PENDIENTE)' : r.status === 'Rechazado' ? ' (RECHAZADA)' : ''}
                                                     </p>
                                                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
@@ -326,11 +324,14 @@ const EmployeeView: React.FC = () => {
                         </div>
                     );
                 })}
-                
-                <div className="px-6 py-4 bg-gray-50 dark:bg-white/5 rounded-[2rem] border border-gray-100 dark:border-white/5">
-                    <p className="text-[10px] text-gray-400 leading-relaxed">
-                        <span className="text-rr-orange font-black text-lg mr-1">*</span>
-                        <span className="font-bold uppercase text-gray-500">Sobre el descuento de Sábados:</span> Trabajamos bajo un régimen de semana inglesa donde los sábados se computan como laborables. El descuento de estos días específicos corresponde a los sábados que caerían dentro de tu licencia si la tomaras de forma corrida. Esta modalidad fraccionada permite mayor flexibilidad y resulta más beneficiosa para organizar tus descansos.
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-6 rounded-[2rem] border border-gray-100 dark:border-white/5">
+                <div className="flex gap-3 items-start">
+                    <Info className="text-gray-400 shrink-0 mt-1" size={18} />
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed">
+                        <span className="font-black uppercase text-gray-600 dark:text-gray-300 block mb-1">Sobre el descuento de Sábados</span>
+                        Trabajamos bajo un régimen de semana inglesa donde los sábados se computan como laborables. El descuento de estos días específicos corresponde a los sábados que caerían dentro de tu licencia si la tomaras en dos bloques de 10 días. Esta modalidad fraccionada permite mayor flexibilidad y resulta más beneficiosa para organizar tus descansos.
                     </p>
                 </div>
             </div>
