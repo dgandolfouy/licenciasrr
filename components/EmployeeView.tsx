@@ -46,7 +46,7 @@ const EmployeeView: React.FC = () => {
     const [formError, setFormError] = useState<string | null>(null);
 
     // --- CONFIGURACIÓN WHATSAPP GERENCIA ---
-    const MANAGER_PHONE = '59895751833'; // REEMPLAZAR CON EL NUMERO REAL (formato internacional sin +)
+    const MANAGER_PHONE = '59899000000'; // REEMPLAZAR CON EL NUMERO REAL (formato internacional sin +)
 
     const daysRequested = useMemo(() => {
         if (!range.start || !range.end) return 0;
@@ -275,6 +275,7 @@ const EmployeeView: React.FC = () => {
                                 <div className="p-8 pt-0 space-y-4">
                                     {records.map(r => {
                                         const isAgreed = r.type === 'Acordado';
+                                        const isSaturday = isAgreed && r.notes?.toLowerCase().includes('sábado');
                                         let bgClass = 'bg-gray-50 border-transparent dark:bg-black/20';
                                         
                                         if (r.status === 'Rechazado') {
@@ -290,6 +291,7 @@ const EmployeeView: React.FC = () => {
                                                 <div>
                                                     <p className={`font-black uppercase text-sm tracking-tight ${r.status === 'Rechazado' ? 'text-red-600' : isAgreed ? 'text-indigo-700 dark:text-indigo-300' : 'text-rr-dark dark:text-white'}`}>
                                                         {formatLeaveLabel(r.type, r.notes)}
+                                                        {isSaturday && <span className="text-rr-orange ml-1">*</span>}
                                                         {r.status === 'Pendiente' ? ' (PENDIENTE)' : r.status === 'Rechazado' ? ' (RECHAZADA)' : ''}
                                                     </p>
                                                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
@@ -324,6 +326,13 @@ const EmployeeView: React.FC = () => {
                         </div>
                     );
                 })}
+                
+                <div className="px-6 py-4 bg-gray-50 dark:bg-white/5 rounded-[2rem] border border-gray-100 dark:border-white/5">
+                    <p className="text-[10px] text-gray-400 leading-relaxed">
+                        <span className="text-rr-orange font-black text-lg mr-1">*</span>
+                        <span className="font-bold uppercase text-gray-500">Sobre el descuento de Sábados:</span> Trabajamos bajo un régimen de semana inglesa donde los sábados se computan como laborables. El descuento de estos días específicos corresponde a los sábados que caerían dentro de tu licencia si la tomaras de forma corrida. Esta modalidad fraccionada permite mayor flexibilidad y resulta más beneficiosa para organizar tus descansos.
+                    </p>
+                </div>
             </div>
 
             <button onClick={() => setIsRequesting(true)} className="fixed bottom-10 right-10 w-20 h-20 bg-rr-orange text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50 border-4 border-white"><Plus size={40} /></button>
