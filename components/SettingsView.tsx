@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Trash2, X, Check, Search, Edit, Save, CalendarPlus, AlertTriangle, ShieldCheck, Loader2, UserPlus, FileDown, Archive, History, ArrowLeft, Filter, Sparkles, CheckCircle2, Lock, ShieldAlert, KeyRound, PlusCircle } from './icons/LucideIcons';
+import { Trash2, X, Check, Search, Edit, Save, CalendarPlus, AlertTriangle, ShieldCheck, Loader2, UserPlus, FileDown, Archive, History, ArrowLeft, Filter, Sparkles, CheckCircle2, Lock, ShieldAlert, KeyRound, PlusCircle, Info } from './icons/LucideIcons';
 import { Employee, LeaveRecord, UserRole, User } from '../types';
 import { formatDateDisplay, getUnifiedHistory, formatLeaveLabel, calculateWorkingDays, getLeaveDaysSummary } from '../utils/leaveCalculator';
 import { generateEmployeeReport, generateGeneralReport } from '../services/pdfService';
@@ -22,7 +22,7 @@ const EmployeeForm: React.FC<{
         id: initialData?.id || '',
         hireDate: initialData?.hireDate || '',
         type: initialData?.type || 'Mensual',
-        password: initialData?.password || ''
+        password: '' // Siempre empezamos con la contraseña vacía en el form
     });
     const [adjustment, setAdjustment] = useState({ days: '', reason: '' });
 
@@ -73,9 +73,18 @@ const EmployeeForm: React.FC<{
                             <option value="Jornalero">Jornalero</option>
                         </select>
                     </div>
+
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-500 uppercase ml-4">Contraseña Inicial</label>
-                        <input type="text" value={formData.password} onChange={(e)=>setFormData({...formData, password: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl font-bold border-none" placeholder="Opcional" />
+                        <label className="text-[10px] font-black text-gray-500 uppercase ml-4">
+                            {initialData ? 'Cambiar Contraseña' : 'Contraseña Inicial'}
+                        </label>
+                        <input 
+                            type="text" 
+                            value={formData.password} 
+                            onChange={(e)=>setFormData({...formData, password: e.target.value})} 
+                            className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl font-bold border-none" 
+                            placeholder={initialData ? "Dejar en blanco para no cambiar" : "Opcional"}
+                        />
                     </div>
                 </div>
 
@@ -121,6 +130,9 @@ const EmployeeForm: React.FC<{
     );
 };
 
+// ... (El resto del archivo `SettingsView.tsx` no necesita cambios)
+// ...
+// --- COMIENZA EL RESTO DEL ARCHIVO ---
 // Subcomponente: Detalle del Empleado (Historial + Reportes)
 const EmployeeDetail: React.FC<{
     employee: Employee,
@@ -420,6 +432,16 @@ const EmployeeDetail: React.FC<{
                             })
                         )}
                     </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-6 rounded-[2rem] border border-gray-100 dark:border-white/5 mt-6">
+                        <div className="flex gap-3 items-start">
+                            <Info className="text-gray-400 shrink-0 mt-1" size={18} />
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed">
+                                <span className="font-black uppercase text-gray-600 dark:text-gray-300 block mb-1">* Sobre el descuento de Sábados</span>
+                                Trabajamos bajo un régimen de semana inglesa donde los sábados se computan como laborables. El descuento de estos días específicos corresponde a los sábados que caerían dentro de tu licencia si la tomaras en dos bloques de 10 días. Esta modalidad fraccionada permite mayor flexibilidad y resulta más beneficiosa para organizar tus descansos.
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="space-y-4">
@@ -512,7 +534,7 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     };
 
     const handleSaveEmployee = async (formData: any, adjustmentData: any) => {
-        let updatedEmployeeData = { ...formData };
+        let updatedEmployeeData: any = { ...formData };
         
         if (viewMode === 'edit' && selectedEmpId) {
             const originalEmployee = employees.find(e => e.id === selectedEmpId);
@@ -534,15 +556,25 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 updatedEmployeeData.leaveRecords = [...(updatedEmployeeData.leaveRecords || []), newAdjustmentRecord];
                 showToast(`Ajuste de ${adjustmentData.days} días registrado.`, 'success');
             }
+            
+            // Si la contraseña está vacía, no la incluimos en la actualización
+            if (!updatedEmployeeData.password) {
+                delete updatedEmployeeData.password;
+            }
+
+        } else if (viewMode === 'create') {
+             if (!updatedEmployeeData.password) {
+                delete updatedEmployeeData.password;
+            }
         }
         
         if (viewMode === 'create') {
             await addEmployee(updatedEmployeeData);
+            setViewMode('list');
         } else {
             await updateEmployee(updatedEmployeeData, selectedEmpId || undefined);
+            setViewMode('detail');
         }
-        
-        setViewMode('detail');
     };
 
     // -- LÓGICA DAYS --
@@ -755,6 +787,15 @@ const SettingsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                                             </div>
                                         </div>
                                     ))}
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-800/50 p-6 rounded-[2rem] border border-gray-100 dark:border-white/5 mt-6">
+                                    <div className="flex gap-3 items-start">
+                                        <Info className="text-gray-400 shrink-0 mt-1" size={18} />
+                                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed">
+                                            <span className="font-black uppercase text-gray-600 dark:text-gray-300 block mb-1">* Sobre el descuento de Sábados</span>
+                                            Trabajamos bajo un régimen de semana inglesa donde los sábados se computan como laborables. El descuento de estos días específicos corresponde a los sábados que caerían dentro de tu licencia si la tomaras en dos bloques de 10 días. Esta modalidad fraccionada permite mayor flexibilidad y resulta más beneficiosa para organizar tus descansos.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         )}

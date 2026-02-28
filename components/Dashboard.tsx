@@ -46,7 +46,7 @@ const Dashboard: React.FC = () => {
     const hasUnread = employee?.hasUnreadNews;
     
     // Lista explícita de administradores por Cédula + Roles
-    const ADMIN_IDS = ['35750440', '40069799'];
+    const ADMIN_IDS = ['35750440', '40069799', '37548962', '41112223'];
     const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.RRHH || ADMIN_IDS.includes(user.id);
 
     const capitalize = (str: string) => {

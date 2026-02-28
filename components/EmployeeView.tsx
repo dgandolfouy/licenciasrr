@@ -330,7 +330,7 @@ const EmployeeView: React.FC = () => {
                 <div className="flex gap-3 items-start">
                     <Info className="text-gray-400 shrink-0 mt-1" size={18} />
                     <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed">
-                        <span className="font-black uppercase text-gray-600 dark:text-gray-300 block mb-1">Sobre el descuento de Sábados</span>
+                        <span className="font-black uppercase text-gray-600 dark:text-gray-300 block mb-1">* Sobre el descuento de Sábados</span>
                         Trabajamos bajo un régimen de semana inglesa donde los sábados se computan como laborables. El descuento de estos días específicos corresponde a los sábados que caerían dentro de tu licencia si la tomaras en dos bloques de 10 días. Esta modalidad fraccionada permite mayor flexibilidad y resulta más beneficiosa para organizar tus descansos.
                     </p>
                 </div>
