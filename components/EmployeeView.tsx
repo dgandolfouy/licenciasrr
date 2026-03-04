@@ -46,7 +46,8 @@ const EmployeeView: React.FC = () => {
     const [formError, setFormError] = useState<string | null>(null);
 
     // --- CONFIGURACIÓN WHATSAPP GERENCIA ---
-    const MANAGER_PHONE = '59899000000'; // REEMPLAZAR CON EL NUMERO REAL (formato internacional sin +)
+    const MANAGER_PHONE = '59895751833'; // REEMPLAZAR CON EL NUMERO REAL (formato internacional sin +)
+    const HR_PHONE = '59894488412'; // REEMPLAZAR CON EL NUMERO DE CRISTINA
 
     const daysRequested = useMemo(() => {
         if (!range.start || !range.end) return 0;
@@ -185,6 +186,23 @@ const EmployeeView: React.FC = () => {
                     // Abrir WhatsApp en nueva pestaña
                     window.open(whatsappUrl, '_blank');
                     showToast("Solicitud creada. Se ha abierto WhatsApp para notificar a Gerencia.", 'success');
+                } else if (employee.type === 'Mensual') {
+                    const formatDate = (d: string) => d.split('-').reverse().join('/');
+                    
+                    const message = `*SOLICITUD DE LICENCIA - ADMINISTRACIÓN* 🏢\n\n` +
+                        `👤 *Colaborador:* ${employee.lastName}, ${employee.name}\n` +
+                        `📅 *Fechas:* ${formatDate(range.start)} al ${formatDate(range.end)}\n` +
+                        `⏳ *Días:* ${calcDays}\n` +
+                        `📝 *Motivo:* ${requestReason}\n\n` +
+                        `-----------------------------------\n` +
+                        `✅ *SI AUTORIZA:* Por favor procese la solicitud en el sistema.\n` +
+                        `❌ *SI NO AUTORIZA:* Responda indicando el motivo para informarlo en el sistema.`;
+
+                    const whatsappUrl = `https://wa.me/${HR_PHONE}?text=${encodeURIComponent(message)}`;
+                    
+                    // Abrir WhatsApp en nueva pestaña
+                    window.open(whatsappUrl, '_blank');
+                    showToast("Solicitud creada. Se ha abierto WhatsApp para notificar a RRHH.", 'success');
                 } else {
                     showToast("Solicitud enviada a RRHH", 'success');
                 }
